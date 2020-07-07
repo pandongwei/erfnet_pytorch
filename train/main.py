@@ -76,7 +76,7 @@ class CrossEntropyLoss2d(torch.nn.Module):
     def __init__(self, weight=None):
         super().__init__()
 
-        self.loss = torch.nn.NLLLoss2d(weight)
+        self.loss = torch.nn.NLLLoss(weight)
 
     def forward(self, outputs, targets):
         return self.loss(torch.nn.functional.log_softmax(outputs, dim=1), targets)
@@ -199,7 +199,7 @@ def train(args, model, enc=False):
 
         epoch_loss = []
         time_train = []
-     
+
         doIouTrain = args.iouTrain   
         doIouVal =  args.iouVal      
 
@@ -231,10 +231,11 @@ def train(args, model, enc=False):
 
             optimizer.zero_grad()
             loss = criterion(outputs, targets[:, 0])
+
             loss.backward()
             optimizer.step()
 
-            epoch_loss.append(loss.data[0])
+            epoch_loss.append(loss.data)
             time_train.append(time.time() - start_time)
 
             if (doIouTrain):
@@ -288,13 +289,14 @@ def train(args, model, enc=False):
             if args.cuda:
                 images = images.cuda()
                 labels = labels.cuda()
+            optimizer.zero_grad()
+            inputs = Variable(images)
+            targets = Variable(labels)
+            with torch.no_grad():
+                outputs = model(inputs, only_encode=enc)
 
-            inputs = Variable(images, volatile=True)    #volatile flag makes it free backward or outputs for eval
-            targets = Variable(labels, volatile=True)
-            outputs = model(inputs, only_encode=enc) 
-
-            loss = criterion(outputs, targets[:, 0])
-            epoch_loss_val.append(loss.data[0])
+                loss = criterion(outputs, targets[:, 0])
+            epoch_loss_val.append(loss.data)
             time_val.append(time.time() - start_time)
 
 
@@ -384,7 +386,7 @@ def train(args, model, enc=False):
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     torch.save(state, filenameCheckpoint)
     if is_best:
-        print ("Saving model as best")
+        print("Saving model as best")
         torch.save(state, filenameBest)
 
 
@@ -481,23 +483,24 @@ def main(args):
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
     parser.add_argument('--state')
 
     parser.add_argument('--port', type=int, default=8097)
-    parser.add_argument('--datadir', default=os.getenv("HOME") + "/datasets/cityscapes/")
+    parser.add_argument('--datadir', default="/mrtstorage/users/pan/leftImg8bit_trainvaltest/")
     parser.add_argument('--height', type=int, default=512)
-    parser.add_argument('--num-epochs', type=int, default=150)
+    parser.add_argument('--num-epochs', type=int, default=250) #150
     parser.add_argument('--num-workers', type=int, default=4)
     parser.add_argument('--batch-size', type=int, default=6)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', required=True)
-    parser.add_argument('--decoder', action='store_true')
-    parser.add_argument('--pretrainedEncoder') #, default="../trained_models/erfnet_encoder_pretrained.pth.tar")
+    parser.add_argument('--savedir', default="erfnet_training1")
+    parser.add_argument('--decoder', action='store_true',default=True)
+    parser.add_argument('--pretrainedEncoder', default="../trained_models/erfnet_encoder_pretrained.pth.tar")
     parser.add_argument('--visualize', action='store_true')
 
     parser.add_argument('--iouTrain', action='store_true', default=False) #recommended: False (takes more time to train otherwise)

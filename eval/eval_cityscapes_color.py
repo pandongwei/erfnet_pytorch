@@ -66,8 +66,8 @@ cityscapes_trainIds2labelIds = Compose([
 def main(args):
 
     modelpath = args.loadDir + args.loadModel
-    weightspath = args.loadDir + args.loadWeights
-
+    #weightspath = args.loadDir + args.loadWeights
+    weightspath = "../save/erfnet_training1/model_best.pth"
     print ("Loading model: " + modelpath)
     print ("Loading weights: " + weightspath)
 
@@ -135,6 +135,7 @@ def main(args):
     
 
 if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
     parser = ArgumentParser()
 
     parser.add_argument('--state')
@@ -144,7 +145,7 @@ if __name__ == '__main__':
     parser.add_argument('--loadModel', default="erfnet.py")
     parser.add_argument('--subset', default="val")  #can be val, test, train, demoSequence
 
-    parser.add_argument('--datadir', default=os.getenv("HOME") + "/datasets/cityscapes/")
+    parser.add_argument('--datadir', default="/mrtstorage/users/pan/leftImg8bit_trainvaltest/")
     parser.add_argument('--num-workers', type=int, default=4)
     parser.add_argument('--batch-size', type=int, default=1)
     parser.add_argument('--cpu', action='store_true')
