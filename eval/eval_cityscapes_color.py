@@ -66,7 +66,7 @@ cityscapes_trainIds2labelIds = Compose([
 def main(args):
 
     modelpath = args.loadDir + args.loadModel
-    #weightspath = args.loadDir + args.loadWeights
+    #weightspath = args.loadDir + args.loadWeights #TODO
     weightspath = "../save/erfnet_training1/model_best.pth"
     print ("Loading model: " + modelpath)
     print ("Loading weights: " + weightspath)

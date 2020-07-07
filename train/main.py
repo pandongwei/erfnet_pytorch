@@ -66,6 +66,7 @@ class MyCoTransform(object):
         if (self.enc):
             target = Resize(int(self.height/8), Image.NEAREST)(target)
         target = ToLabel()(target)
+        #target = Relabel(255, 19)(target) #TODO
         target = Relabel(255, 19)(target)
 
         return input, target
@@ -87,6 +88,8 @@ def train(args, model, enc=False):
 
     #TODO: calculate weights by processing dataset histogram (now its being set by hand from the torch values)
     #create a loder to run all images and calculate histogram of labels, then create weight array using class balancing
+
+    # 这是给每一个类别，根据其出现的频率给一个对应的权重 TODO
 
     weight = torch.ones(NUM_CLASSES)
     if (enc):
@@ -131,6 +134,8 @@ def train(args, model, enc=False):
         weight[18] = 10.138095855713	
 
     weight[19] = 0
+
+
 
     assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
 
@@ -222,11 +227,13 @@ def train(args, model, enc=False):
             if args.cuda:
                 images = images.cuda()
                 labels = labels.cuda()
-
+            #print("image: ", images.size())
+            #print("labels: ", labels.size())
             inputs = Variable(images)
             targets = Variable(labels)
             outputs = model(inputs, only_encode=enc)
 
+            #print("output: ", outputs.size()) #TODO
             #print("targets", np.unique(targets[:, 0].cpu().data.numpy()))
 
             optimizer.zero_grad()
@@ -483,7 +490,7 @@ def main(args):
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -492,13 +499,13 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--datadir', default="/mrtstorage/users/pan/leftImg8bit_trainvaltest/")
     parser.add_argument('--height', type=int, default=512)
-    parser.add_argument('--num-epochs', type=int, default=250) #150
+    parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=6)
+    parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="erfnet_training1")
+    parser.add_argument('--savedir', default="erfnet_training_feriburgForest")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="../trained_models/erfnet_encoder_pretrained.pth.tar")
     parser.add_argument('--visualize', action='store_true')
