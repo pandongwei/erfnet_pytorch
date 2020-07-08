@@ -15,12 +15,13 @@ def is_image(filename):
 
 def is_label(filename): #TODO
     #return filename.endswith("_labelTrainIds.png")
-    return filename.endswith("_labelTrainIds_forFreiburgForest.png")
+    return filename.endswith("_forFreiburgForest.png")
 
 def image_path(root, basename, extension):
     return os.path.join(root, f'{basename}{extension}')
 
 def image_path_city(root, name):
+    # print("333333333333333333333333333",os.path.join(root, f'{name}'))
     return os.path.join(root, f'{name}')
 
 def image_basename(filename):
@@ -59,7 +60,6 @@ class VOC12(Dataset):
 
 
 
-
 class cityscapes(Dataset):
 
     def __init__(self, root, co_transform=None, subset='train'):
@@ -69,7 +69,7 @@ class cityscapes(Dataset):
         self.images_root += subset
         self.labels_root += subset
 
-        print (self.images_root)
+        #print (self.images_root)
         #self.filenames = [image_basename(f) for f in os.listdir(self.images_root) if is_image(f)]
         self.filenames = [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(self.images_root)) for f in fn if is_image(f)]
         self.filenames.sort()
@@ -85,7 +85,8 @@ class cityscapes(Dataset):
     def __getitem__(self, index):
         filename = self.filenames[index]
         filenameGt = self.filenamesGt[index]
-
+        # print("111111111111111111111111111 ", filename)
+        # print("f2222222222222222222222222222222222  ",filenameGt)
         with open(image_path_city(self.images_root, filename), 'rb') as f:
             image = load_image(f).convert('RGB')
         with open(image_path_city(self.labels_root, filenameGt), 'rb') as f:
@@ -99,3 +100,41 @@ class cityscapes(Dataset):
     def __len__(self):
         return len(self.filenames)
 
+
+class freiburgForest(Dataset):
+
+    def __init__(self, root, co_transform=None, subset='train'):
+        self.images_root = os.path.join(root, subset+'/rgb')
+        self.labels_root = os.path.join(root, subset+'/GT_color')
+        # print (self.images_root)
+        # self.filenames = [image_basename(f) for f in os.listdir(self.images_root) if is_image(f)]
+        self.filenames = [os.path.join(self.images_root, f) for f in os.listdir(self.images_root)]
+        self.filenames.sort()
+        self.filenamesGt = [os.path.join(self.labels_root, f) for f in os.listdir(self.labels_root)]
+        self.filenamesGt.sort()
+
+        self.co_transform = co_transform  # ADDED THIS
+
+    def __getitem__(self, index):
+        filename = self.filenames[index]
+        filenameGt = self.filenamesGt[index]
+        # print("111111111111111111111111111 ", filename)
+        # print("f2222222222222222222222222222222222  ",filenameGt)
+        with open(image_path_city(self.images_root, filename), 'rb') as f:
+            image = load_image(f).convert('RGB')
+        with open(image_path_city(self.labels_root, filenameGt), 'rb') as f:
+            label = load_image(f).convert('P')
+
+        if self.co_transform is not None:
+            image, label = self.co_transform(image, label)
+        print("image:   ",image.size())
+        print("label:   ",label.size())
+        temp = set()
+        for i in range(512):
+            for j in range(1024):
+                temp.add(label[0][i][j])
+        print("111111111111111111111",temp)
+        return image, label
+
+    def __len__(self):
+        return len(self.filenames)
