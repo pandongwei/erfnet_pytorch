@@ -29,7 +29,7 @@ from iouEval import iouEval, getColorEntry
 from shutil import copyfile
 
 NUM_CHANNELS = 3
-NUM_CLASSES = 6 #pascal=22, cityscapes=20
+NUM_CLASSES = 7 #pascal=22, cityscapes=20
 
 color_transform = Colorize(NUM_CLASSES)
 image_transform = ToPILImage()
@@ -68,7 +68,13 @@ class MyCoTransform(object):
             target = Resize(int(self.height/8), Image.NEAREST)(target)
         target = ToLabel()(target)
         #target = Relabel(255, 19)(target) #TODO
-        #target = Relabel(255, 5)(target)
+        target = Relabel(0, 1)(target)
+        target = Relabel(35, 2)(target)
+        target = Relabel(96, 2)(target)
+        target = Relabel(100, 4)(target)
+        target = Relabel(150, 5)(target)
+        target = Relabel(170, 6)(target)
+        target = Relabel(255, 3)(target)
 
         return input, target
 
@@ -447,11 +453,26 @@ def main(args):
         if args.cuda:
             model = torch.nn.DataParallel(model).cuda()
         #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
+    # TODO 加载cityscape的训练权重，然后再做迁移学习
+    weightspath = "../save/cityscape_6classes_2/model_best.pth"
+    # def load_my_state_dict(model, state_dict):  #custom function to load model when not all dict elements
+    #     own_state = model.state_dict()
+    #     for name, param in state_dict.items():
+    #         if name not in own_state:
+    #              continue
+    #         own_state[name].copy_(param)
+    #     return model
+    # model = load_my_state_dict(model, torch.load(weightspath))
+    weights_cityscape = torch.load(weightspath)
+    del weights_cityscape['module.decoder.output_conv.weight']
+    del weights_cityscape['module.decoder.output_conv.bias']
+    model.load_state_dict(weights_cityscape, strict=False)
+
     model = train(args, model, False)   #Train decoder
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -460,13 +481,13 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--datadir', default="/mrtstorage/users/pan/freiburg_forest_multispectral_annotated/freiburg_forest_annotated/")
     parser.add_argument('--height', type=int, default=512)
-    parser.add_argument('--num-epochs', type=int, default=10) #150
+    parser.add_argument('--num-epochs', type=int, default=150) # 150
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=1)
+    parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="erfnet_training_feriburgForest_try_1")
+    parser.add_argument('--savedir', default="feriburgForest_1")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="")
     parser.add_argument('--visualize', action='store_true')

@@ -123,17 +123,18 @@ class freiburgForest(Dataset):
         with open(image_path_city(self.images_root, filename), 'rb') as f:
             image = load_image(f).convert('RGB')
         with open(image_path_city(self.labels_root, filenameGt), 'rb') as f:
-            label = load_image(f).convert('P')
-
+            label = load_image(f).convert('L')
+        # print("image:   ",image.getpixel((0,0)))
+        # print("label:   ",label.getpixel((0,0)))
         if self.co_transform is not None:
             image, label = self.co_transform(image, label)
-        print("image:   ",image.size())
-        print("label:   ",label.size())
-        temp = set()
-        for i in range(512):
-            for j in range(1024):
-                temp.add(label[0][i][j])
-        print("111111111111111111111",temp)
+        # print("image:   ",image.size())
+        # print("label:   ",label.size())
+        # temp = set()
+        # for i in range(512):
+        #     for j in range(1024):
+        #         temp.add(int(label[0][i][j].numpy()))
+        # print("111111111111111111111",temp)
         return image, label
 
     def __len__(self):

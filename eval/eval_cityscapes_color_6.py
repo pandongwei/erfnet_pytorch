@@ -24,7 +24,7 @@ import visdom
 
 
 NUM_CHANNELS = 3
-NUM_CLASSES = 20
+NUM_CLASSES = 6
 
 image_transform = ToPILImage()
 input_transform_cityscapes = Compose([
@@ -35,7 +35,7 @@ input_transform_cityscapes = Compose([
 target_transform_cityscapes = Compose([
     Resize((512,1024),Image.NEAREST),
     ToLabel(),
-    Relabel(255, 19),   #ignore label to 19
+    Relabel(255, 5),   #ignore label to 19
 ])
 
 cityscapes_trainIds2labelIds = Compose([
@@ -91,7 +91,7 @@ def main(args):
         return model
 
     model = load_my_state_dict(model, torch.load(weightspath))
-    print ("Model and weights LOADED successfully")
+    print("Model and weights LOADED successfully")
 
     model.eval()
 
