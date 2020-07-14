@@ -72,9 +72,9 @@ class MyCoTransform(object):
         target = Relabel(35, 2)(target)
         target = Relabel(96, 2)(target)
         target = Relabel(100, 4)(target)
-        target = Relabel(150, 5)(target)
+        target = Relabel(150, 3)(target)
         target = Relabel(170, 6)(target)
-        target = Relabel(255, 3)(target)
+        target = Relabel(255, 5)(target)
 
         return input, target
 
@@ -472,7 +472,7 @@ def main(args):
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")

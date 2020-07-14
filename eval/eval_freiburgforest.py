@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import os
 import importlib
-
+import matplotlib.pyplot as plt
 from PIL import Image
 from argparse import ArgumentParser
 
@@ -39,16 +39,16 @@ target_transform_cityscapes = Compose([
     Relabel(35, 2),
     Relabel(96, 2),
     Relabel(100, 4),
-    Relabel(150, 5),
+    Relabel(150, 3),
     Relabel(170, 6),
-    Relabel(255, 3),
+    Relabel(255, 5),
 ])
 
 def main(args):
 
     modelpath = args.loadDir + args.loadModel
     #weightspath = args.loadDir + args.loadWeights #TODO
-    weightspath = "../save/feriburgForest_1/model_best.pth"
+    weightspath = "../save/feriburgForest_1/model_best_1.pth"
     print ("Loading model: " + modelpath)
     print ("Loading weights: " + weightspath)
 
@@ -103,11 +103,26 @@ def main(args):
         #label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
         label_color = Colorize()(label.unsqueeze(0))
 
-        filenameSave = "./freiburgforest_1/" + filename[0].split("freiburg_forest_annotated/")[0]
+        filenameSave = "./freiburgforest_1/" + filename[0].split("freiburg_forest_annotated/")[1]
         os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
-        #image_transform(label.byte()).save(filenameSave)      
-        label_save = ToPILImage()(label_color)           
-        label_save.save(filenameSave) #TODO
+        #image_transform(label.byte()).save(filenameSave)
+
+        # label_save = ToPILImage()(label_color)
+        label_save = label_color.numpy()
+        label_save = label_save.transpose(1, 2, 0)
+        # label_save.save(filenameSave)
+        images = images.cpu().numpy().squeeze(axis=0)
+        images = images.transpose(1,2,0)
+
+        # print(images.shape)
+        # print(label_save.shape)
+        plt.figure(figsize=(10.24, 5.12), dpi=100)
+        plt.imshow(images)
+        plt.imshow(label_save,alpha=0.6)
+        plt.axis('off')
+        # plt.show()
+        plt.savefig(filenameSave,dpi=100)
+        plt.close()
 
         if (args.visualize):
             vis.image(label_color.numpy())

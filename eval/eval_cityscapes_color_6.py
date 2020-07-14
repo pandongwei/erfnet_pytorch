@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import os
 import importlib
-
+import matplotlib.pyplot as plt
 from PIL import Image
 from argparse import ArgumentParser
 
@@ -124,9 +124,24 @@ def main(args):
 
         filenameSave = "./cityscape_6classes_2/" + filename[0].split("leftImg8bit/")[1]
         os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
-        #image_transform(label.byte()).save(filenameSave)      
-        label_save = ToPILImage()(label_color)           
-        label_save.save(filenameSave) 
+        #image_transform(label.byte()).save(filenameSave)
+
+        # label_save = ToPILImage()(label_color)
+        label_save = label_color.numpy()
+        label_save = label_save.transpose(1, 2, 0)
+        # label_save.save(filenameSave)
+        images = images.cpu().numpy().squeeze(axis=0)
+        images = images.transpose(1,2,0)
+
+        # print(images.shape)
+        # print(label_save.shape)
+        plt.figure(figsize=(10.24, 5.12), dpi=100)
+        plt.imshow(images)
+        plt.imshow(label_save,alpha=0.6)
+        plt.axis('off')
+        # plt.show()
+        plt.savefig(filenameSave,dpi=100)
+        plt.close()
 
         if (args.visualize):
             vis.image(label_color.numpy())

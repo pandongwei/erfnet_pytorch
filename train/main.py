@@ -251,7 +251,7 @@ def train(args, model, enc=False):
             epoch_loss.append(loss.data)
             time_train.append(time.time() - start_time)
 
-            if (doIouTrain):
+            if (doIouTrain): # 计算IOU
                 #start_time_iou = time.time()
                 iouEvalTrain.addBatch(outputs.max(1)[1].unsqueeze(1).data, targets.data)
                 #print ("Time to add confusion matrix: ", time.time() - start_time_iou)      
