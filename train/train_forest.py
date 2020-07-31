@@ -1,8 +1,3 @@
-# Main code for training ERFNet model in Cityscapes dataset
-# Sept 2017
-# Eduardo Romera
-#######################
-
 import os
 import random
 import time
@@ -200,8 +195,8 @@ def train(args, model, enc=False):
             targets = Variable(labels)
             outputs = model(inputs, only_encode=enc)
 
-            #print("output: ", outputs.size()) #TODO
-            #print("targets", np.unique(targets[:, 0].cpu().data.numpy()))
+            print("output: ", outputs.size()) #TODO
+            print("targets", np.unique(targets[:, 0].cpu().data.numpy()))
 
             optimizer.zero_grad()
             loss = criterion(outputs, targets[:, 0])
@@ -464,6 +459,7 @@ def main(args):
     #     return model
     # model = load_my_state_dict(model, torch.load(weightspath))
     weights_cityscape = torch.load(weightspath)
+    # 删除掉不匹配的权重层
     del weights_cityscape['module.decoder.output_conv.weight']
     del weights_cityscape['module.decoder.output_conv.bias']
     model.load_state_dict(weights_cityscape, strict=False)
@@ -472,7 +468,7 @@ def main(args):
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -487,7 +483,7 @@ if __name__ == '__main__':
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="feriburgForest_1")
+    parser.add_argument('--savedir', default="feriburgForest_2")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="")
     parser.add_argument('--visualize', action='store_true')
