@@ -2,7 +2,7 @@ import os
 import random
 import time
 import torch
-import visdom
+
 import numpy as np
 
 from PIL import Image, ImageOps
@@ -157,9 +157,6 @@ def train(args, model, enc=False):
     if args.visualize and args.steps_plot > 0:
         board = Dashboard(args.port)
 
-    # 训练可视化
-    viz = visdom.Visdom()
-    win = viz.scatter(X=np.asarray([[0, 0]]))
 
     for epoch in range(start_epoch, args.num_epochs+1):
         print("----- TRAINING - EPOCH", epoch, "-----")
@@ -202,11 +199,7 @@ def train(args, model, enc=False):
 
             optimizer.zero_grad()
             loss = criterion(outputs, targets[:, 0])
-            # TODO 可视化
-            viz.scatter(X=np.array([[epoch, loss.item()]]),
-                        name="train",
-                        win=win,
-                        update="append")
+
 
             loss.backward()
             optimizer.step()
@@ -274,11 +267,6 @@ def train(args, model, enc=False):
                 loss = criterion(outputs, targets[:, 0])
             epoch_loss_val.append(loss.data)
             time_val.append(time.time() - start_time)
-            # TODO 可视化
-            viz.scatter(X=np.array([[epoch, epoch_loss_val]]),
-                        name='val',
-                        win=win,
-                        update='append')
 
             #Add batch to calculate TP, FP and FN for iou estimation
             if (doIouVal):
@@ -483,7 +471,7 @@ def main(args):
 if __name__ == '__main__':
     # weightspath = "../save/feriburgForest_1/model_best.pth"
     # weights_cityscape = torch.load(weightspath)
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -492,9 +480,9 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--datadir', default="/mrtstorage/users/pan/material_dataset_v2/")
     parser.add_argument('--height', type=int, default=104)
-    parser.add_argument('--num-epochs', type=int, default=200)
+    parser.add_argument('--num-epochs', type=int, default=100)
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=4)
+    parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs

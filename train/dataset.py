@@ -148,30 +148,28 @@ class geoMat(Dataset):
         self.filenames = []
         self.filenamesGt = []
         for dir_1 in os.listdir(self.images_root):
-            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1)]
+            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1) if '800x800' in f] #只选择800*800的进行训练
             self.filenames.extend(temp_1)
         self.filenames.sort()
         for dir_1 in os.listdir(self.labels_root):
-            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1)]
+            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1) if '800x800' in f] #只选择800*800的进行训练
             self.filenamesGt.extend(temp_2)
         self.filenamesGt.sort()
-
+        assert len(self.filenames) == len(self.filenamesGt)
         self.co_transform = co_transform  # ADDED THIS
+
 
     def __getitem__(self, index):
         filename = self.filenames[index]
         filenameGt = self.filenamesGt[index]
 
-        with open(image_path_city(self.images_root, filename), 'rb') as f:
-            image = load_image(f).convert('RGB')
-        # open label and quantization in form of numpy
-        label = cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)
-        label = (label // 25) * 25
-        label = Image.fromarray(label).convert('L')
+        image = np.array(cv2.imread(filename)).astype(np.float32)
+
+        label = np.array(cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)).astype(np.float32)
         if self.co_transform is not None:
             image, label = self.co_transform(image, label)
 
-        return image, label
+        return image, label, filename
 
     def __len__(self):
         return len(self.filenames)

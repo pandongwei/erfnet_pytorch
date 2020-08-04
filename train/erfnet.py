@@ -132,6 +132,48 @@ class Decoder (nn.Module):
 
         return output
 
+class Decoder_regression (nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+
+        self.layers = nn.ModuleList()
+
+        self.layers.append(UpsamplerBlock(128,64))
+        self.layers.append(non_bottleneck_1d(64, 0, 1))
+        self.layers.append(non_bottleneck_1d(64, 0, 1))
+
+        self.layers.append(UpsamplerBlock(64,16))
+        self.layers.append(non_bottleneck_1d(16, 0, 1))
+        self.layers.append(non_bottleneck_1d(16, 0, 1))
+
+        self.mean = nn.ModuleList()
+        self.mean.append(nn.Conv2d(in_channels=16,out_channels=4,kernel_size=3,stride=1,padding=1))
+        self.mean.append(nn.BatchNorm2d(num_features=4))
+        self.mean.append(nn.ConvTranspose2d(in_channels=4,out_channels=1,kernel_size=2,stride=2,padding=0, output_padding=0,bias=True))
+        self.mean = nn.Sequential(*self.mean)
+
+        self.var = nn.ModuleList()
+        self.var.append(nn.Conv2d(in_channels=16,out_channels=4,kernel_size=3,stride=1,padding=1))
+        self.var.append(nn.BatchNorm2d(num_features=4))
+        self.var.append(nn.ConvTranspose2d(in_channels=4,out_channels=1,kernel_size=2,stride=2,padding=0, output_padding=0,bias=True))
+        self.var = nn.Sequential(*self.var)
+
+    def forward(self, input):
+        output = input
+
+        for layer in self.layers:
+            output = layer(output)
+
+        mean = self.mean(output)
+        var = self.var(output)
+        # TODO 标准差加一个以e为底，避免其太小
+        var = torch.exp(var)
+        # print(mean.shape)
+        # print(var.shape)
+        outputs = torch.cat([mean,var],dim=1)
+
+        return outputs
+
 #ERFNet
 class Net(nn.Module):
     def __init__(self, num_classes, encoder=None):  #use encoder to pass pretrained encoder
@@ -142,6 +184,24 @@ class Net(nn.Module):
         else:
             self.encoder = encoder
         self.decoder = Decoder(num_classes)
+
+    def forward(self, input, only_encode=False):
+        if only_encode:
+            return self.encoder.forward(input, predict=True)
+        else:
+            output = self.encoder(input)    #predict=False by default
+            return self.decoder.forward(output)
+
+#ERFNet regression
+class Net_regression(nn.Module):
+    def __init__(self, num_classes=2, encoder=None):  #use encoder to pass pretrained encoder
+        super().__init__()
+
+        if (encoder == None):
+            self.encoder = Encoder(num_classes)
+        else:
+            self.encoder = encoder
+        self.decoder = Decoder_regression(num_classes)
 
     def forward(self, input, only_encode=False):
         if only_encode:
