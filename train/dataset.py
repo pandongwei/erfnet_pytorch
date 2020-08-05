@@ -168,7 +168,12 @@ class geoMat(Dataset):
         label = np.array(cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)).astype(np.float32)
         if self.co_transform is not None:
             image, label = self.co_transform(image, label)
-
+        # 用于检查训练数据的大小分布
+        # image = label.numpy().transpose(1,2,0)
+        # #gray = cv2.cvtColor(np.array(image),cv2.COLOR_RGB2GRAY)
+        # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(image)
+        #
+        # print(min_pixel, '   ', max_pixel)
         return image, label, filename
 
     def __len__(self):
