@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, CenterCrop, Normalize, Resize, Pad
 from torchvision.transforms import ToTensor, ToPILImage
 
-from dataset import VOC12,cityscapes,freiburgForest
+from dataset import freiburgForest1
 from transform import Relabel, ToLabel, Colorize
 from visualize import Dashboard
 
@@ -23,11 +23,9 @@ from iouEval import iouEval, getColorEntry
 
 from shutil import copyfile
 
-NUM_CHANNELS = 3
 NUM_CLASSES = 4 #pascal=22, cityscapes=20
 
 color_transform = Colorize(NUM_CLASSES)
-image_transform = ToPILImage()
 
 #Augmentations - different function implemented to perform random augments on both image and target
 class MyCoTransform(object):
@@ -40,35 +38,35 @@ class MyCoTransform(object):
 
     def __call__(self, input, target):
         # do something to both images
-        input =  Resize((self.height,self.weight), Image.BILINEAR)(input)
-        target = Resize((self.height,self.weight), Image.NEAREST)(target)
+        input = cv2.resize(input,(self.height, self.weight), interpolation=cv2.INTER_LINEAR)
+        target = cv2.resize(target,(self.height, self.weight), interpolation=cv2.INTER_NEAREST)
+
+        if self.rescale:
+            input = input/255.
+
 
         if (self.augment):
             # Random hflip
             hflip = random.random()
             if (hflip < 0.5):
-                input = input.transpose(Image.FLIP_LEFT_RIGHT)
-                target = target.transpose(Image.FLIP_LEFT_RIGHT)
-
-            #Random translation 0-2 pixels (fill rest with padding
-            transX = random.randint(-2, 2)
-            transY = random.randint(-2, 2)
-
-            input = ImageOps.expand(input, border=(transX,transY,0,0), fill=0)
-            target = ImageOps.expand(target, border=(transX,transY,0,0), fill=255) #pad label filling with 255
-            input = input.crop((0, 0, input.size[0]-transX, input.size[1]-transY))
-            target = target.crop((0, 0, target.size[0]-transX, target.size[1]-transY))
-
+                input = cv2.flip(input,1)
+                target = cv2.flip(target,1)
         input = ToTensor()(input)
-        if (self.enc):
-            target = Resize(int(self.height/8), Image.NEAREST)(target)
-        target = ToLabel()(target)
-        #target = Relabel(255, 19)(target) #TODO
+        target = torch.from_numpy(np.array(target)).long().unsqueeze(0)
+
+        # target = Relabel(0, 1)(target)  #障碍
+        # target = Relabel(35, 2)(target) #树
+        # target = Relabel(96, 2)(target) #树
+        # target = Relabel(100, 4)(target) #天
+        # target = Relabel(150, 3)(target) #草地
+        # target = Relabel(170, 6)(target) #沙地
+        # target = Relabel(255, 5)(target) # void
+        # 0->可通行，1->不可通行，2->待判断，3->天空
         target = Relabel(0, 1)(target)  #障碍
         target = Relabel(35, 1)(target) #树
         target = Relabel(96, 1)(target) #树
-        target = Relabel(100, 3)(target) #天
-        target = Relabel(150, 2)(target) #草地
+        target = Relabel(99, 3)(target) #天
+        target = Relabel(149, 2)(target) #草地
         target = Relabel(170, 2)(target) #沙地
         target = Relabel(255, 1)(target) # void
 
@@ -93,18 +91,13 @@ def train(args, model, enc=False):
 
     # 这是给每一个类别，根据其出现的频率给一个对应的权重 TODO
     weight = torch.ones(NUM_CLASSES)
-    # weight[0] = 9.799923181533899
-    # weight[1] = 80.8582022190093
-    # weight[2] = 4.6323022842407
-    # weight[3] = 9.5608062744141
-    # weight[4] = 7.8698215484619
 
     assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
 
-    co_transform = MyCoTransform(enc, augment=True, height=args.height)#1024)
-    co_transform_val = MyCoTransform(enc, augment=False, height=args.height)#1024)
-    dataset_train = freiburgForest(args.datadir, co_transform, 'train')
-    dataset_val = freiburgForest(args.datadir, co_transform_val, 'test')
+    co_transform = MyCoTransform(enc, augment=True, rescale=True, height=args.height)#1024)
+    co_transform_val = MyCoTransform(enc, augment=False, rescale=True, height=args.height)#1024)
+    dataset_train = freiburgForest1(args.datadir, co_transform, 'train')
+    dataset_val = freiburgForest1(args.datadir, co_transform_val, 'test')
 
     loader = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
     loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
@@ -179,7 +172,7 @@ def train(args, model, enc=False):
             usedLr = float(param_group['lr'])
 
         model.train()
-        for step, (images, labels) in enumerate(loader):
+        for step, (images, labels, filename) in enumerate(loader):
 
             start_time = time.time()
             #print (labels.size())
@@ -253,7 +246,7 @@ def train(args, model, enc=False):
         if (doIouVal):
             iouEvalVal = iouEval(NUM_CLASSES)
 
-        for step, (images, labels) in enumerate(loader_val):
+        for step, (images, labels, filename) in enumerate(loader_val):
             start_time = time.time()
             if args.cuda:
                 images = images.cuda()
@@ -378,18 +371,6 @@ def main(args):
         model = torch.nn.DataParallel(model).cuda()
     
     if args.state:
-        #if args.state is provided then load this state for training
-        #Note: this only loads initialized weights. If you want to resume a training use "--resume" option!!
-        """
-        try:
-            model.load_state_dict(torch.load(args.state))
-        except AssertionError:
-            model.load_state_dict(torch.load(args.state,
-                map_location=lambda storage, loc: storage))
-        #When model is saved as DataParallel it adds a model. to each key. To remove:
-        #state_dict = {k.partition('model.')[2]: v for k,v in state_dict}
-        #https://discuss.pytorch.org/t/prefix-parameter-names-in-saved-model-if-trained-by-multi-gpu/494
-        """
         def load_my_state_dict(model, state_dict):  #custom function to load model when not all dict keys are there
             own_state = model.state_dict()
             for name, param in state_dict.items():
@@ -401,30 +382,6 @@ def main(args):
         #print(torch.load(args.state))
         model = load_my_state_dict(model, torch.load(args.state))
 
-    """
-    def weights_init(m):
-        classname = m.__class__.__name__
-        if classname.find('Conv') != -1:
-            #m.weight.data.normal_(0.0, 0.02)
-            n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            m.weight.data.normal_(0, math.sqrt(2. / n))
-        elif classname.find('BatchNorm') != -1:
-            #m.weight.data.normal_(1.0, 0.02)
-            m.weight.data.fill_(1)
-            m.bias.data.fill_(0)
-
-    #TO ACCESS MODEL IN DataParallel: next(model.children())
-    #next(model.children()).decoder.apply(weights_init)
-    #Reinitialize weights for decoder
-    
-    next(model.children()).decoder.layers.apply(weights_init)
-    next(model.children()).decoder.output_conv.apply(weights_init)
-
-    #print(model.state_dict())
-    f = open('weights5.txt', 'w')
-    f.write(str(model.state_dict()))
-    f.close()
-    """
 
     #train(args, model)
     if (not args.decoder):
@@ -474,7 +431,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', default="erfnet")
     parser.add_argument('--state')
 
-    parser.add_argument('--port', type=int, default=8097)
+    parser.add_argument('--port', type=int, default=8098)
     parser.add_argument('--datadir', default="/mrtstorage/users/pan/freiburg_forest_multispectral_annotated/freiburg_forest_annotated/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) # 150
@@ -483,10 +440,10 @@ if __name__ == '__main__':
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="feriburgForest_3")
+    parser.add_argument('--savedir', default="feriburgForest_4")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="")
-    parser.add_argument('--visualize', action='store_true')
+    parser.add_argument('--visualize', action='store_true',default=False)
 
     parser.add_argument('--iouTrain', action='store_true', default=False) #recommended: False (takes more time to train otherwise)
     parser.add_argument('--iouVal', action='store_true', default=True)  

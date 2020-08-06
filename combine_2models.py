@@ -11,15 +11,11 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
 from tensorboardX import SummaryWriter
-from train.dataset import geoMat
-from train.transform import Colorize
-from train.erfnet import Net, Net_regression
-
-import importlib
-from iouEval import iouEval, getColorEntry
-
+from train.dataset import freiburgForest, freiburgForest1
+from train.transform import Colorize, Relabel
+from train.erfnet import ERFNet, ERFNet_regression
+from train.iouEval import iouEval, getColorEntry
 from shutil import copyfile
-
 
 mean_and_var = 2
 
@@ -27,12 +23,12 @@ color_transform = Colorize(mean_and_var)
 
 #Augmentations - different function implemented to perform random augments on both image and target
 class MyCoTransform(object):
-    def __init__(self, augment=True, rescale=True, size=104):
+    def __init__(self, augment=True, rescale=True, size=(104,104)):
 
         self.augment = augment
-        self.size = (size,size)
+        self.size = size
+        self.rescale = rescale
 
-        pass
     def __call__(self, input, target):
         # do something to both images
         # input = Resize(self.size, Image.BILINEAR)(input)
@@ -40,8 +36,9 @@ class MyCoTransform(object):
         input = cv2.resize(input,self.size,interpolation=cv2.INTER_LINEAR)
         target = cv2.resize(target,self.size,interpolation=cv2.INTER_NEAREST)
 
-        input = input/255.
-        target = target/255.
+        if self.rescale:
+            input = input/255.
+            target = target/255.
 
         if(self.augment):
             # Random hflip
@@ -51,18 +48,18 @@ class MyCoTransform(object):
                 # target = target.transpose(Image.FLIP_LEFT_RIGHT)
                 input = cv2.flip(input,1)
                 target = cv2.flip(target,1)
-            
-            #Random translation 0-2 pixels (fill rest with padding
-            # transX = random.randint(-2, 2)
-            # transY = random.randint(-2, 2)
-
-            # input = ImageOps.expand(input, border=(transX,transY,0,0), fill=0)
-            # target = ImageOps.expand(target, border=(transX,transY,0,0), fill=255) #pad label filling with 255
-            # input = input.crop((0, 0, input.size[0]-transX, input.size[1]-transY))
-            # target = target.crop((0, 0, target.size[0]-transX, target.size[1]-transY))
 
         input = ToTensor()(input)
-        target = torch.from_numpy(np.array(target)).unsqueeze(0)
+        target = torch.from_numpy(np.array(target)).long().unsqueeze(0)
+
+        target = Relabel(0, 1)(target)
+        target = Relabel(35, 2)(target)
+        target = Relabel(96, 2)(target)
+        target = Relabel(100, 4)(target)
+        target = Relabel(150, 3)(target)
+        target = Relabel(170, 6)(target)
+        target = Relabel(255, 5)(target)
+
         return input, target
 
 # build the loss function nagetive Gaussian log-likelihood loss
@@ -84,17 +81,20 @@ class GaussianLogLikelihoodLoss(torch.nn.Module):
         return 0.5*(loss_1 + 0.01*loss_2)
 
 
-def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, args, enc=False):
-    min_loss = float('inf')
+def train(model, dataloader_train, dataloader_eval, criterion, optimizer, cfg):
+    cuda = cfg['cuda']
+    savedir = cfg['savedir']
+    resume = cfg['resume']
+    train_savedir = f'save/{savedir}'
+    epochs = int(cfg['epochs'])
+    steps_loss = int(cfg['steps_loss'])
 
+    min_loss = float('inf')
     # use tensorboard
-    writer = SummaryWriter(log_dir=savedir)
-    if (enc):
-        automated_log_path = savedir + "/automated_log_encoder.txt"
-        modeltxtpath = savedir + "/model_encoder.txt"
-    else:
-        automated_log_path = savedir + "/automated_log.txt"
-        modeltxtpath = savedir + "/model.txt"    
+    writer = SummaryWriter(log_dir=train_savedir)
+
+    automated_log_path = train_savedir + "/automated_log.txt"
+    modeltxtpath = train_savedir + "/model.txt"
 
     if (not os.path.exists(automated_log_path)):    #dont add first line if it exists 
         with open(automated_log_path, "a") as myfile:
@@ -103,15 +103,11 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
     with open(modeltxtpath, "w") as myfile:
         myfile.write(str(model))
 
-
     start_epoch = 1
-    if args.resume:
-        #Must load weights, optimizer, epoch and best value. 
-        if enc:
-            filenameCheckpoint = savedir + '/checkpoint_enc.pth.tar'
-        else:
-            filenameCheckpoint = savedir + '/checkpoint.pth.tar'
+    if resume:
+        #Must load weights, optimizer, epoch and best value.
 
+        filenameCheckpoint = train_savedir + '/checkpoint.pth.tar'
         assert os.path.exists(filenameCheckpoint), "Error: resume option was used but checkpoint was not found in folder"
         checkpoint = torch.load(filenameCheckpoint)
         start_epoch = checkpoint['epoch']
@@ -121,12 +117,12 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
         print("=> Loaded checkpoint at epoch {})".format(checkpoint['epoch']))
 
     #scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5) # set up scheduler     ## scheduler 1
-    lambda1 = lambda epoch: pow((1-((epoch-1)/args.num_epochs)),0.9)  ## scheduler 2
+    lambda1 = lambda epoch: pow((1-((epoch-1)/epochs)),0.9)  ## scheduler 2
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)                             ## scheduler 2
 
 
 
-    for epoch in range(start_epoch, args.num_epochs+1):
+    for epoch in range(start_epoch, epochs+1):
         print("----- TRAINING - EPOCH", epoch, "-----")
 
         scheduler.step(epoch)    ## scheduler 2
@@ -134,8 +130,8 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
         epoch_loss = []
         time_train = []
 
-        doIouTrain = args.iouTrain   
-        doIouVal =  args.iouVal      
+        doIouTrain = cfg['iouTrain']
+        doIouVal =  cfg['iouVal']
 
         if (doIouTrain):
             iouEvalTrain = iouEval(mean_and_var)
@@ -153,14 +149,14 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
             #print (np.unique(labels.numpy()))
             #print("labels: ", np.unique(labels[0].numpy()))
             #labels = torch.ones(4, 1, 512, 1024).long()
-            if args.cuda:
+            if cuda:
                 images = images.cuda()
                 labels = labels.cuda()
             #print("image: ", images.size())
             #print("labels: ", labels.size())
             inputs = Variable(images)
             targets = Variable(labels)
-            outputs = model(inputs, only_encode=enc)
+            outputs = model(inputs)
 
             # print("output: ", outputs.size()) #TODO
             # print("targets", np.unique(targets[:, 0].cpu().data.numpy()))
@@ -178,9 +174,7 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
             if (doIouTrain):
                 #start_time_iou = time.time()
                 iouEvalTrain.addBatch(outputs.max(1)[1].unsqueeze(1).data, targets.data)
-                #print ("Time to add confusion matrix: ", time.time() - start_time_iou)      
-
-
+                #print ("Time to add confusion matrix: ", time.time() - start_time_iou)
             
         average_epoch_loss_train = sum(epoch_loss) / len(epoch_loss)
         writer.add_scalar('train_loss', average_epoch_loss_train, epoch)
@@ -202,23 +196,23 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
 
         for step, (images, labels,_) in enumerate(dataloader_eval):
             start_time = time.time()
-            if args.cuda:
+            if cuda:
                 images = images.cuda()
                 labels = labels.cuda()
             optimizer.zero_grad()
             inputs = Variable(images)
             targets = Variable(labels)
             with torch.no_grad():
-                outputs = model(inputs, only_encode=enc)
+                outputs = model(inputs)
 
                 loss = criterion(outputs, targets[:, 0])
             epoch_loss_val.append(loss.data)
             time_val.append(time.time() - start_time)
 
-            if args.steps_loss > 0 and step % args.steps_loss == 0:
+            if steps_loss > 0 and step % steps_loss == 0:
                 average = sum(epoch_loss_val) / len(epoch_loss_val)
                 print(f'VAL loss: {average:0.4} (epoch: {epoch}, step: {step})', 
-                        "// Avg time/img: %.4f s" % (sum(time_val) / len(time_val) / args.batch_size))
+                        "// Avg time/img: %.4f s" % (sum(time_val) / len(time_val) / cfg['batch_size']))
 
         average_epoch_loss_val = sum(epoch_loss_val) / len(epoch_loss_val)
         #scheduler.step(average_epoch_loss_val, epoch)  ## scheduler 1   # update lr if needed
@@ -232,12 +226,9 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
 
         is_best = average_epoch_loss_val < min_loss
         min_loss = min(min_loss, average_epoch_loss_val)
-        if enc:
-            filenameCheckpoint = savedir + '/checkpoint_enc.pth.tar'
-            filenameBest = savedir + '/model_best_enc.pth.tar'    
-        else:
-            filenameCheckpoint = savedir + '/checkpoint.pth.tar'
-            filenameBest = savedir + '/model_best.pth.tar'
+
+        filenameCheckpoint = train_savedir + '/checkpoint.pth.tar'
+        filenameBest = train_savedir + '/model_best.pth.tar'
         save_checkpoint({
             'epoch': epoch + 1,
             'arch': str(model),
@@ -247,24 +238,17 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
         }, is_best, filenameCheckpoint, filenameBest)
 
         #SAVE MODEL AFTER EPOCH
-        if (enc):
-            filename = f'{savedir}/model_encoder-{epoch:03}.pth'
-            filenamebest = f'{savedir}/model_encoder_best.pth'
-        else:
-            filename = f'{savedir}/model-{epoch:03}.pth'
-            filenamebest = f'{savedir}/model_best.pth'
-        if args.epochs_save > 0 and step > 0 and step % args.epochs_save == 0:
+        filename = f'{train_savedir}/model-{epoch:03}.pth'
+        filenamebest = f'{train_savedir}/model_best.pth'
+        if cfg['epochs_save'] > 0 and step > 0 and step % cfg['epochs_save'] == 0:
             torch.save(model.state_dict(), filename)
             print(f'save: {filename} (epoch: {epoch})')
         if (is_best):
             torch.save(model.state_dict(), filenamebest)
             print(f'save: {filenamebest} (epoch: {epoch})')
-            if (not enc):
-                with open(savedir + "/best.txt", "w") as myfile:
-                    myfile.write("Best epoch is %d, with Val-IoU= %.4f" % (epoch, iouVal))   
-            else:
-                with open(savedir + "/best_encoder.txt", "w") as myfile:
-                    myfile.write("Best epoch is %d, with Val-IoU= %.4f" % (epoch, iouVal))           
+
+            with open(train_savedir + "/best.txt", "w") as myfile:
+                myfile.write("Best epoch is %d, with Val-IoU= %.4f" % (epoch, iouVal))
 
         #SAVE TO FILE A ROW WITH THE EPOCH RESULT (train loss, val loss, train IoU, val IoU)
         #Epoch		Train-loss		Test-loss	Train-IoU	Test-IoU		learningRate
@@ -278,6 +262,8 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
     cuda = cfg['cuda']
     savedir = cfg['savedir']
     data_savedir = f'eval/{savedir}'
+    model_geoMat.eval()
+    model_freiburgForest.eval()
     for step, (images, labels, filename) in enumerate(dataloader_test):
         if (cuda):
             images = images.cuda()
@@ -287,37 +273,22 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
         with torch.no_grad():
             outputs_1 = model_freiburgForest(inputs)
             outputs_2 = model_geoMat(inputs)
+        # batch size = 1,结果处理成可以显示的格式
+        outputs_1 = outputs_1[0].max(0)[1].byte().cpu().data
+        outputs_1 = Colorize()(outputs_1.unsqueeze(0))
+        outputs_1 = outputs_1.numpy().transpose(1, 2, 0)
 
-        # 对输出做处理，得到可以显示的图像格式
-        outputs_2 = outputs_2[:,1,:,:].cpu().data.unsqueeze(1)
-        outputs_2 = outputs_2.numpy().transpose(0, 2, 3, 1)
-
+        outputs_2 = outputs_2[0, 1, :, :].cpu().data.unsqueeze(0)
+        outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
         images = images.cpu().numpy()
-        images = images.transpose(0, 2,3,1)
+        images = images[0].transpose(1, 2, 0)
 
-        # print(images.shape)
-        # print(label_save.shape)
-        for i in range(len(filename)):
-            fileSave = data_savedir + filename[i].split("freiburg_forest_annotated")[1]
-            os.makedirs(os.path.dirname(fileSave), exist_ok=True)
-            min_pixel, max_pixel, _, _ = cv2.minMaxLoc(outputs_2[i])
-            print(min_pixel,'   ', max_pixel)
-            output = cv2.normalize(outputs_2[i], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-            output = output*255
-            min_pixel, max_pixel, _, _ = cv2.minMaxLoc(output)
-            print(min_pixel,'   ', max_pixel)
-            cv2.imwrite(fileSave,output)
-
-            # print(fileSave)
-            # plt.figure(figsize=(10.4,10.4), dpi=10)
-            # # plt.imshow(images)
-            # plt.imshow(label_save,alpha=0.6,cmap='gray')
-            # plt.axis('off')
-            # # plt.show()
-            # plt.savefig(fileSave,dpi=10)
-            # plt.close()
-
-
+        fileSave = data_savedir + filename[0].split("freiburg_forest_annotated")[1]
+        os.makedirs(os.path.dirname(fileSave), exist_ok=True)
+        output = outputs_1
+        # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(output)
+        # print(min_pixel,'   ', max_pixel)
+        cv2.imwrite(fileSave,output)
 
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     torch.save(state, filenameCheckpoint)
@@ -326,7 +297,6 @@ def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
         torch.save(state, filenameBest)
 
 def main():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  ## TODO
     # load parameters
     with open('config/config.json', 'r') as f:
         cfg = json.load(f)
@@ -334,7 +304,8 @@ def main():
     cuda = cfg['cuda']
     model = cfg['model']
     size_geoMat = int(cfg['size_geoMat'])
-    size_freiburgForest = int(cfg['size_freiburgForest'])
+    width_freiburgForest = int(cfg['width_freiburgForest'])
+    height_freiburgForest = int(cfg['height_freiburgforest'])
     epochs = int(cfg['epochs'])
     learning_rate = float(cfg['learning_rate'])
     num_workers = int(cfg['num_workers'])
@@ -348,6 +319,8 @@ def main():
     model_freiburgForest = cfg['model_freiburgForest']
     weight_freigburgForest = cfg['weight_freigburgForest']
 
+    size_freiburgForest = (width_freiburgForest, height_freiburgForest)
+    size_geoMat = (size_geoMat, size_geoMat)
     data_savedir = f'eval/{savedir}'
     model_savedir = f'save/{savedir}'
     if not os.path.exists(data_savedir):
@@ -356,8 +329,8 @@ def main():
         os.makedirs(model_savedir)
 
     #Load both Models
-    model_geoMat = Net_regression()
-    model_freiburgForest = Net(7)
+    model_geoMat = ERFNet_regression()
+    model_freiburgForest = ERFNet(7)
     # copyfile(args.model + ".py", savedir + '/' + args.model + ".py") # 在训练时候可以加上
     
     if cuda:
@@ -366,20 +339,21 @@ def main():
 
     assert os.path.exists(datadir_geoMat) or os.path.exists(datadir_freiburgForest), "Error: datadir (dataset directory) could not be loaded"
 
-    # co_transform = MyCoTransform(augment=True, rescale=True, size=size)
-    co_transform_val = MyCoTransform(augment=False, rescale=True, size=size_freiburgForest)
-    # dataset_train = geoMat(datadir_geoMat, co_transform, 'train')
-    dataset_val = geoMat(datadir_freiburgForest, co_transform_val, 'test')
+    co_transform = MyCoTransform(augment=True, rescale=False, size=size_freiburgForest)
+    co_transform_val = MyCoTransform(augment=False, rescale=False, size=size_freiburgForest)
+    dataset_train = freiburgForest1(datadir_freiburgForest, co_transform, 'train')
+    dataset_val = freiburgForest1(datadir_freiburgForest, co_transform_val, 'test')
 
-    #loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
+    loader_train = DataLoader(dataset_train, num_workers=num_workers, batch_size=batch_size, shuffle=True)
     loader_val = DataLoader(dataset_val, num_workers=num_workers, batch_size=batch_size, shuffle=False)
 
     criterion = GaussianLogLikelihoodLoss()
     #optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=2e-4)     ## scheduler 1
-    optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=1e-4)
+    optimizer = Adam(model_freiburgForest.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=1e-4)
 
-    #model = train(savedir, model, loader_train,loader_val,criterion,optimizer,False)   #Train decoder
-    #print("========== TRAINING FINISHED ===========")
+    # 训练freiburg forest数据集的网络
+    #model_freiburgForest = train(model_freiburgForest, loader_train, loader_val, criterion, optimizer, cfg)   #Train decoder
+    print("========== TRAINING FINISHED ===========")
 
     print("========== START TESTING ==============")
     def load_my_state_dict(model, state_dict):
@@ -392,9 +366,12 @@ def main():
     model_geoMat = load_my_state_dict(model_geoMat, torch.load(weight_geoMat))
     model_freiburgForest = load_my_state_dict(model_freiburgForest, torch.load(weight_freigburgForest))
 
-    test(model_geoMat, model_freiburgForest, loader_val, cfg)
+
+    loader_test = DataLoader(dataset_val, num_workers=num_workers, batch_size=1, shuffle=False)
+    test(model_geoMat, model_freiburgForest, loader_test, cfg)
 
 
 
 if __name__ == '__main__':
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  ## TODO
     main()

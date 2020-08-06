@@ -175,7 +175,7 @@ class Decoder_regression (nn.Module):
         return outputs
 
 #ERFNet
-class Net(nn.Module):
+class ERFNet(nn.Module):
     def __init__(self, num_classes, encoder=None):  #use encoder to pass pretrained encoder
         super().__init__()
 
@@ -193,7 +193,7 @@ class Net(nn.Module):
             return self.decoder.forward(output)
 
 #ERFNet regression
-class Net_regression(nn.Module):
+class ERFNet_regression(nn.Module):
     def __init__(self, num_classes=2, encoder=None):  #use encoder to pass pretrained encoder
         super().__init__()
 
