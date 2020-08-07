@@ -147,9 +147,10 @@ class freiburgForest1(Dataset):
 
         image = np.array(cv2.imread(filename)).astype(np.float32)    # TODO .astype(np.float32)
         label = np.array(cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)).astype(np.float32)  #TODO .astype(np.float32)
-
+        # print(image.shape)
         if self.co_transform is not None:
             image, label = self.co_transform(image, label)
+        # print(image.shape)
         return image, label, filename
 
     def __len__(self):
@@ -189,6 +190,7 @@ class geoMat(Dataset):
         # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(image)
         #
         # print(min_pixel, '   ', max_pixel)
+
         return image, label, filename
 
     def __len__(self):

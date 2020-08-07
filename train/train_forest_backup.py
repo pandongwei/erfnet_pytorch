@@ -38,8 +38,8 @@ class MyCoTransform(object):
 
     def __call__(self, input, target):
         # do something to both images
-        input = cv2.resize(input,(self.height, self.weight), interpolation=cv2.INTER_LINEAR)
-        target = cv2.resize(target,(self.height, self.weight), interpolation=cv2.INTER_NEAREST)
+        input = cv2.resize(input,(self.weight, self.height), interpolation=cv2.INTER_LINEAR)
+        target = cv2.resize(target,(self.weight, self.height), interpolation=cv2.INTER_NEAREST)
 
         if self.rescale:
             input = input/255.
@@ -62,13 +62,13 @@ class MyCoTransform(object):
         # target = Relabel(170, 6)(target) #沙地
         # target = Relabel(255, 5)(target) # void
         # 0->可通行，1->不可通行，2->待判断，3->天空
-        target = Relabel(0, 1)(target)  #障碍
-        target = Relabel(35, 1)(target) #树
-        target = Relabel(96, 1)(target) #树
+        target = Relabel(0, 0)(target)  #障碍
+        target = Relabel(35, 0)(target) #树
+        target = Relabel(96, 0)(target) #树
         target = Relabel(99, 3)(target) #天
         target = Relabel(149, 2)(target) #草地
         target = Relabel(170, 2)(target) #沙地
-        target = Relabel(255, 1)(target) # void
+        target = Relabel(255, 0)(target) # void
 
         return input, target
 
@@ -425,7 +425,7 @@ def main(args):
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -436,11 +436,11 @@ if __name__ == '__main__':
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) # 150
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=4)
+    parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="feriburgForest_4")
+    parser.add_argument('--savedir', default="feriburgForest_5")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="")
     parser.add_argument('--visualize', action='store_true',default=False)

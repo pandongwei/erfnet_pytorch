@@ -17,9 +17,37 @@ from train.erfnet import ERFNet, ERFNet_regression
 from train.iouEval import iouEval, getColorEntry
 from shutil import copyfile
 
-mean_and_var = 2
+num_class = 2
 
-color_transform = Colorize(mean_and_var)
+def colormap_cityscapes(n):
+    cmap = np.zeros([n+1, 3]).astype(np.uint8)
+    for i in range(n):
+        cmap[i, :] = np.array([0, i, 255-i])
+    cmap[n,:] = np.array([255, 0, 0])
+    return cmap
+
+class Colorize:
+
+    def __init__(self, n=256):
+        self.cmap = colormap_cityscapes(256)
+        # self.cmap[n] = self.cmap[-1]
+
+    def __call__(self, gray_image):
+        shape = gray_image.shape
+        #print(size)
+        color_image = np.zeros([3, shape[0],shape[1]])
+        # print(gray_image.shape, color_image.shape)
+        for label in range(0, len(self.cmap)):
+            mask = gray_image[:,:,0] == label
+            is_sky = gray_image[:,:,0] == -1
+            color_image[0][mask] = self.cmap[label][0]
+            color_image[1][mask] = self.cmap[label][1]
+            color_image[2][mask] = self.cmap[label][2]
+            color_image[0][is_sky] = self.cmap[label][0]
+            color_image[1][is_sky] = self.cmap[label][1]
+            color_image[2][is_sky] = self.cmap[label][2]
+
+        return color_image
 
 #Augmentations - different function implemented to perform random augments on both image and target
 class MyCoTransform(object):
@@ -33,6 +61,7 @@ class MyCoTransform(object):
         # do something to both images
         # input = Resize(self.size, Image.BILINEAR)(input)
         # target = Resize(self.size, Image.NEAREST)(target)
+
         input = cv2.resize(input,self.size,interpolation=cv2.INTER_LINEAR)
         target = cv2.resize(target,self.size,interpolation=cv2.INTER_NEAREST)
 
@@ -52,13 +81,13 @@ class MyCoTransform(object):
         input = ToTensor()(input)
         target = torch.from_numpy(np.array(target)).long().unsqueeze(0)
 
-        target = Relabel(0, 1)(target)
-        target = Relabel(35, 2)(target)
-        target = Relabel(96, 2)(target)
-        target = Relabel(100, 4)(target)
-        target = Relabel(150, 3)(target)
-        target = Relabel(170, 6)(target)
-        target = Relabel(255, 5)(target)
+        # target = Relabel(0, 1)(target)
+        # target = Relabel(35, 2)(target)
+        # target = Relabel(96, 2)(target)
+        # target = Relabel(99, 4)(target)
+        # target = Relabel(149, 3)(target)
+        # target = Relabel(170, 6)(target)
+        # target = Relabel(255, 5)(target)
 
         return input, target
 
@@ -134,7 +163,7 @@ def train(model, dataloader_train, dataloader_eval, criterion, optimizer, cfg):
         doIouVal =  cfg['iouVal']
 
         if (doIouTrain):
-            iouEvalTrain = iouEval(mean_and_var)
+            iouEvalTrain = iouEval(num_class)
 
         usedLr = 0
         for param_group in optimizer.param_groups:
@@ -192,7 +221,7 @@ def train(model, dataloader_train, dataloader_eval, criterion, optimizer, cfg):
         time_val = []
 
         if (doIouVal):
-            iouEvalVal = iouEval(mean_and_var)
+            iouEvalVal = iouEval(num_class)
 
         for step, (images, labels,_) in enumerate(dataloader_eval):
             start_time = time.time()
@@ -274,18 +303,41 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
             outputs_1 = model_freiburgForest(inputs)
             outputs_2 = model_geoMat(inputs)
         # batch size = 1,结果处理成可以显示的格式
-        outputs_1 = outputs_1[0].max(0)[1].byte().cpu().data
-        outputs_1 = Colorize()(outputs_1.unsqueeze(0))
-        outputs_1 = outputs_1.numpy().transpose(1, 2, 0)
+        # print(inputs.shape)
 
+        outputs_1 = outputs_1[0].max(0)[1].byte().cpu().data.unsqueeze(0)
+        # outputs_1 = Colorize()(outputs_1)
+        # print(outputs_1.shape)
+        outputs_1 = outputs_1.numpy().transpose(1, 2, 0).astype(np.float32)
+        # print(outputs_1.shape)
         outputs_2 = outputs_2[0, 1, :, :].cpu().data.unsqueeze(0)
         outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
-        images = images.cpu().numpy()
-        images = images[0].transpose(1, 2, 0)
+        outputs_2 = cv2.normalize(outputs_2, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+        outputs_2 = outputs_2[:,:,np.newaxis]
+        # output = output * 255
 
+        output_combine = np.zeros((512,1024,1))
+        # print(11111111111111111,outputs_1.shape,outputs_2.shape,output_combine.shape)
+        for row in range(outputs_1.shape[0]):
+            for col in range(outputs_1.shape[1]):
+                if outputs_1[row][col][0] == 2:
+                    output_combine[row][col][0] = int(outputs_2[row][col][0]*255)
+                elif outputs_1[row][col][0] == 3:
+                    output_combine[row][col][0] = -1
+                else:
+                    output_combine[row][col][0] = int(outputs_1[row][col][0] * 255)
+        # print(output_combine)
+        output_combine = Colorize()(output_combine).transpose(1, 2, 0).astype(np.float32)
+
+        images = images.cpu().numpy()
+        images = images[0].transpose(1, 2, 0)*255
+
+        # print(output_combine.shape, images.shape)
         fileSave = data_savedir + filename[0].split("freiburg_forest_annotated")[1]
         os.makedirs(os.path.dirname(fileSave), exist_ok=True)
-        output = outputs_1
+        output = cv2.addWeighted(images, 0.4, output_combine, 0.6, 0)
+
+
         # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(output)
         # print(min_pixel,'   ', max_pixel)
         cv2.imwrite(fileSave,output)
@@ -320,6 +372,7 @@ def main():
     weight_freigburgForest = cfg['weight_freigburgForest']
 
     size_freiburgForest = (width_freiburgForest, height_freiburgForest)
+
     size_geoMat = (size_geoMat, size_geoMat)
     data_savedir = f'eval/{savedir}'
     model_savedir = f'save/{savedir}'
@@ -330,7 +383,7 @@ def main():
 
     #Load both Models
     model_geoMat = ERFNet_regression()
-    model_freiburgForest = ERFNet(7)
+    model_freiburgForest = ERFNet(4)
     # copyfile(args.model + ".py", savedir + '/' + args.model + ".py") # 在训练时候可以加上
     
     if cuda:
@@ -340,7 +393,7 @@ def main():
     assert os.path.exists(datadir_geoMat) or os.path.exists(datadir_freiburgForest), "Error: datadir (dataset directory) could not be loaded"
 
     co_transform = MyCoTransform(augment=True, rescale=False, size=size_freiburgForest)
-    co_transform_val = MyCoTransform(augment=False, rescale=False, size=size_freiburgForest)
+    co_transform_val = MyCoTransform(augment=False, rescale=True, size=size_freiburgForest)
     dataset_train = freiburgForest1(datadir_freiburgForest, co_transform, 'train')
     dataset_val = freiburgForest1(datadir_freiburgForest, co_transform_val, 'test')
 
@@ -373,5 +426,5 @@ def main():
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  ## TODO
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## TODO
     main()
