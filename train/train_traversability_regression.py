@@ -25,7 +25,6 @@ from iouEval import iouEval, getColorEntry
 
 from shutil import copyfile
 
-
 mean_and_var = 2
 
 color_transform = Colorize(mean_and_var)
@@ -36,6 +35,7 @@ class MyCoTransform(object):
 
         self.augment = augment
         self.size = (size,size)
+        self.rescale = rescale
 
         pass
     def __call__(self, input, target):
@@ -45,8 +45,9 @@ class MyCoTransform(object):
         input = cv2.resize(input,self.size,interpolation=cv2.INTER_LINEAR)
         target = cv2.resize(target,self.size,interpolation=cv2.INTER_NEAREST)
 
-        input = input/255.
-        target = target/255.
+        if self.rescale:
+            input = input/255.
+            target = target/255.
 
         if(self.augment):
             # Random hflip
@@ -76,7 +77,7 @@ class GaussianLogLikelihoodLoss(torch.nn.Module):
         super(GaussianLogLikelihoodLoss,self).__init__()
 
     def forward(self, outputs, targets):
-        mean, var = outputs[:,0,:,:],outputs[:,1,:,:]
+        mean, var = outputs[:,0,:,:], outputs[:,1,:,:]
         # print(mean)
         # print(var)
         # print(targets)
@@ -84,12 +85,56 @@ class GaussianLogLikelihoodLoss(torch.nn.Module):
         # print(2*torch.pow(var,2))
         loss_1 = torch.mean(torch.pow(mean - targets,2)/(2*torch.pow(var,2)))
         loss_2 = torch.mean(torch.log(var))
+        #loss_3,_ = torch.max(torch.mean(-var*100), 0)
+        # 尝试使得网络输出log(var**2)而不是var，从而改变loss的表达形式，让loss1不会太大nan
+        # loss_1 = torch.mean(0.5*torch.exp(-var)*torch.pow(mean-targets,2))
+        # loss_2 = torch.mean(0.5*var)
+
         # print("loss1: ",loss_1)
         # print('loss2: ',loss_2)
         return 0.5*(loss_1 + 0.01*loss_2)
 
+# 这个也不行
+class GaussianLogLikelihoodLoss_1(torch.nn.Module):
+    def __init__(self):
+        super(GaussianLogLikelihoodLoss_1,self).__init__()
 
-def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, args, enc=False):
+    def forward(self, outputs, targets):
+        mean, var = outputs[:,0,:,:], outputs[:,1,:,:]
+        loss_1 = torch.mean(torch.pow(mean - targets,2)/(2*torch.pow(var,2)))
+        loss_2 = torch.mean(torch.max(torch.zeros(var.shape).cuda(), 0.5*torch.log(var**2)))
+        loss_3 = torch.mean(torch.max(torch.zeros(mean.shape).cuda(), mean**2 - mean))
+        # print("loss1: ",loss_1)
+        # print('loss2: ',loss_2)
+        return 0.5*(loss_1 + 0.01*loss_2) + 0.5*loss_3
+# L1 loss + punlishment
+class GaussianLogLikelihoodLoss_2(torch.nn.Module):
+    def __init__(self):
+        super(GaussianLogLikelihoodLoss_2,self).__init__()
+
+    def forward(self, outputs, targets):
+        mean, var = outputs[:,0,:,:], outputs[:,1,:,:]
+        loss_1 = torch.mean(torch.abs(mean - targets))
+        loss_3 = torch.mean(torch.max(torch.zeros(mean.shape).cuda(), mean**2 - mean))
+        # print("loss1: ",loss_1)
+        # print('loss2: ',loss_2)
+        return 0.5*(loss_1 + 2*loss_3)
+# modified nagetive Gaussian log-likelihood loss with punishment
+class GaussianLogLikelihoodLoss_3(torch.nn.Module):
+    def __init__(self):
+        super(GaussianLogLikelihoodLoss_3,self).__init__()
+
+    def forward(self, outputs, targets):
+        mean, log_var2 = outputs[:,0,:,:], outputs[:,1,:,:]
+        loss_1 = torch.mean(torch.pow(mean - targets,2)/(2*torch.exp(log_var2)))
+        loss_2 = 0.5*torch.mean(log_var2)
+        loss_3 = torch.mean(torch.max(torch.zeros(mean.shape).cuda(), mean**2 - mean))
+        # print("loss1: ",loss_1)
+        # print('loss2: ',loss_2)
+        return 0.5*(loss_1 + loss_2 + 2*loss_3)
+
+
+def train(savedir, model ,dataloader_train,dataloader_eval,criterion,optimizer, args, enc=False):
     min_loss = float('inf')
 
     # use tensorboard
@@ -136,7 +181,7 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
     for epoch in range(start_epoch, args.num_epochs+1):
         print("----- TRAINING - EPOCH", epoch, "-----")
 
-        scheduler.step(epoch)    ## scheduler 2
+        scheduler.step(epoch)    
 
         epoch_loss = []
         time_train = []
@@ -251,7 +296,7 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
 
         average_epoch_loss_val = sum(epoch_loss_val) / len(epoch_loss_val)
         #scheduler.step(average_epoch_loss_val, epoch)  ## scheduler 1   # update lr if needed
-        writer.add_scalar('train_loss', average_epoch_loss_val, epoch)
+        writer.add_scalar('eval_loss', average_epoch_loss_val, epoch)
 
         iouVal = 0
         if (doIouVal):
@@ -300,6 +345,7 @@ def train(savedir, model,dataloader_train,dataloader_eval,criterion,optimizer, a
         with open(automated_log_path, "a") as myfile:
             myfile.write("\n%d\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.8f" % (epoch, average_epoch_loss_train, average_epoch_loss_val, iouTrain, iouVal, usedLr ))
     writer.close()
+    torch.save(model.state_dict(), f'{savedir}/weight_final.pth')
     return(model)   #return model (convenience for encoder-decoder training)
 
 
@@ -314,7 +360,7 @@ def test(filenameSave, model, dataloader_test, args):
             outputs = model(inputs)
 
         # print(outputs.shape)
-        label = outputs[:,1,:,:].cpu().data
+        label = outputs[:,0,:,:].cpu().data
         # print(label.shape)
         #label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
         label_color = (label.unsqueeze(1))
@@ -331,14 +377,14 @@ def test(filenameSave, model, dataloader_test, args):
         # print(images.shape)
         # print(label_save.shape)
         for i in range(len(filename)):
-            fileSave = '../eval/geoMat_regression_2' + filename[i].split("material_dataset_v2")[1]
+            fileSave = '../eval/'+ args.savedir + filename[i].split("material_dataset_v2")[1]
+            # print(fileSave)
             os.makedirs(os.path.dirname(fileSave), exist_ok=True)
             min_pixel, max_pixel, _, _ = cv2.minMaxLoc(label_save[i])
             print(min_pixel,'   ', max_pixel)
-            output = cv2.normalize(label_save[i], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+            # output = cv2.normalize(label_save[i], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+            # output = label_save[i]
             output = output*255
-            min_pixel, max_pixel, _, _ = cv2.minMaxLoc(output)
-            print(min_pixel,'   ', max_pixel)
             cv2.imwrite(fileSave,output)
 
             # print(fileSave)
@@ -368,7 +414,7 @@ def main(args):
     #Load Model
     assert os.path.exists(args.model + ".py"), "Error: model definition not found"
     model_file = importlib.import_module(args.model)
-    model = model_file.Net_regression(mean_and_var)
+    model = model_file.ERFNet_regression_simplified(mean_and_var)
     copyfile(args.model + ".py", savedir + '/' + args.model + ".py")
     
     if args.cuda:
@@ -386,38 +432,28 @@ def main(args):
 
     savedir = f'../save/{args.savedir}'
 
-    criterion = GaussianLogLikelihoodLoss()
+    criterion = GaussianLogLikelihoodLoss_2() #TODO 尝试不同的loss
+    # 尝试一下L1 loss，结果说明这个效果很不好
+    # criterion = torch.nn.L1Loss()
     #optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=2e-4)     ## scheduler 1
     optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=1e-4)
-        #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
-    # # TODO 加载cityscape的训练权重，然后再做迁移学习
-    # weightspath = "../save/feriburgForest_1/model_best.pth"
-    # # def load_my_state_dict(model, state_dict):  #custom function to load model when not all dict elements
-    # #     own_state = model.state_dict()
-    # #     for name, param in state_dict.items():
-    # #         if name not in own_state:
-    # #              continue
-    # #         own_state[name].copy_(param)
-    # #     return model
-    # # model = load_my_state_dict(model, torch.load(weightspath))
-    # weights_freiburgForest = torch.load(weightspath)
-    #
-    # model.load_state_dict(weights_freiburgForest, strict=False)
 
-    #model = train(savedir, model, loader_train,loader_val,criterion,optimizer,args,False)   #Train decoder
+
+    model = train(savedir, model, loader_train,loader_val,criterion,optimizer,args,False)   #Train decoder
     print("========== TRAINING FINISHED ===========")
 
     print("========== START TESTING ==============")
-    model_dir = "/home/pan/repository/erfnet_pytorch/save/"+args.savedir+'/model_best.pth'
-    model_dir = "/home/pan/repository/erfnet_pytorch/save/geoMat_regression_2/model_best.pth"
-    def load_my_state_dict(model, state_dict):
-        own_state = model.state_dict()
-        for name, param in state_dict.items():
-            if name not in own_state:
-                 continue
-            own_state[name].copy_(param)
-        return model
-    model = load_my_state_dict(model, torch.load(model_dir))
+    # model_dir = "/home/pan/repository/erfnet_pytorch/save/"+args.savedir+'/weight_final.pth'
+    # #model_dir = "/home/pan/repository/erfnet_pytorch/save/geoMat_regression_2/checkpoint.pth.tar"
+    # def load_my_state_dict(model, state_dict):
+    #     # state_dict = state_dict["state_dict"]
+    #     own_state = model.state_dict()
+    #     for name, param in state_dict.items():
+    #         if name not in own_state:
+    #              continue
+    #         own_state[name].copy_(param)
+    #     return model
+    # model = load_my_state_dict(model, torch.load(model_dir))
     filenameSave = "./eval/" + args.savedir
     os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
     test(filenameSave, model, loader_val, args)
@@ -427,7 +463,7 @@ def main(args):
 if __name__ == '__main__':
     # weightspath = "../save/feriburgForest_1/model_best.pth"
     # weights_cityscape = torch.load(weightspath)
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -436,13 +472,13 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--datadir', default="/mrtstorage/users/pan/material_dataset_v2/")
     parser.add_argument('--size', type=int, default=104)
-    parser.add_argument('--num-epochs', type=int, default=200)
+    parser.add_argument('--num-epochs', type=int, default=300)
     parser.add_argument('--num-workers', type=int, default=4)
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="geoMat_regression_2")
+    parser.add_argument('--savedir', default="geoMat_regression_13")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="")
     parser.add_argument('--visualize', action='store_true')

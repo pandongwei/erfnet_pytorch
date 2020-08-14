@@ -160,19 +160,25 @@ class geoMat(Dataset):
 
     def __init__(self, root, co_transform=None, subset='train'):
         self.images_root = os.path.join(root, subset+'/rgb')
-        self.labels_root = os.path.join(root, subset+'/GT_color')
+        self.labels_root = os.path.join(root, subset+'/GT_color_version_3')
         self.filenames = []
         self.filenamesGt = []
         for dir_1 in os.listdir(self.images_root):
-            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1) if '800x800' in f] #只选择800*800的进行训练
+            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1) ] #只选择800*800的进行训练 if ("800x800" in f) or ("400x400" in f)
             self.filenames.extend(temp_1)
         self.filenames.sort()
         for dir_1 in os.listdir(self.labels_root):
-            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1) if '800x800' in f] #只选择800*800的进行训练
+            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1) ] #只选择800*800的进行训练
             self.filenamesGt.extend(temp_2)
         self.filenamesGt.sort()
         assert len(self.filenames) == len(self.filenamesGt)
         self.co_transform = co_transform  # ADDED THIS
+
+        # image = np.array(cv2.imread(self.filenames[1000])).astype(np.float32)
+        # label = np.array(cv2.imread(self.filenamesGt[1000], cv2.IMREAD_GRAYSCALE)).astype(np.float32)
+        # image, label = self.co_transform(image, label)
+        # print(1111)
+
 
 
     def __getitem__(self, index):
@@ -191,7 +197,7 @@ class geoMat(Dataset):
         #
         # print(min_pixel, '   ', max_pixel)
 
-        return image, label, filename
+        return image, label, filenameGt
 
     def __len__(self):
         return len(self.filenames)
@@ -199,6 +205,6 @@ class geoMat(Dataset):
 
 
 if __name__ == "__main__":
-    from train.train_for_traversability import MyCoTransform
+    from train.train_traversability_regression import MyCoTransform
     co_transform = MyCoTransform(augment=True)
     dataset_train = geoMat("/mrtstorage/users/pan/material_dataset_v2/", co_transform, 'train')

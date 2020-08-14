@@ -8,14 +8,14 @@ road_traversability = {
     "Cement - Granular": 1.0,
     "Cement - Smooth": 1.0,
     "Concrete - Precast": 1.0,
-    "Foliage": 0.4,
-    "Grass": 0.4,
+    "Foliage": 0.4,  # 0.2,0.4
+    "Grass": 0.4,  # 0.2, 0.4
     "Gravel": 0.2,
     "Paving": 1.0,
     "Soil - Compact": 1.0,
-    "Soil - Dirt and Vegetation": 0.8,
+    "Soil - Dirt and Vegetation": 1,  # 0.8, 1
     "Soil - Loose": 0.8,
-    "Soil - Mulch": 0.6,
+    "Soil - Mulch": 0.6,  # 0.6, 1
     "Stone - Granular": 1.0,
     "Wood": 1.0
 }
@@ -37,9 +37,20 @@ def traversability_processing(img, class_name):
         img[mask] = 128
     return img
 
+def traversability_processing_1(img, class_name):
+    shape = img.shape
+    try:
+        coef = road_traversability[class_name]
+    except:
+        print("can not find the corresponding road class and coef is set to 1.0")
+        print(class_name)
+        coef = 1.0
+    img = np.ones(shape)*coef*255
+    return img
+
 def main():
-    folder_path = "/mrtstorage/users/pan/material_dataset_v2/label/"
-    path_save = "/mrtstorage/users/pan/material_dataset_v2/label_processing/"
+    folder_path = "/mrtstorage/users/pan/material_dataset_v2/label_processing_1/"
+    path_save = "/mrtstorage/users/pan/material_dataset_v2/label_processing_4/"
     for dir_1 in os.listdir(folder_path):
         for dir_2 in os.listdir(folder_path+dir_1):
             file_folder_path = folder_path + dir_1+"/"+dir_2
@@ -53,7 +64,7 @@ def main():
 
                     img = cv2.imread(file_path)
 
-                    img = traversability_processing(img,dir_1)
+                    img = traversability_processing_1(img,dir_1)
 
                     # 对深度图做处理
                     # min_pixel,max_pixel,_,_ = cv2.minMaxLoc(img)

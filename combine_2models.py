@@ -13,7 +13,7 @@ from torchvision.transforms import ToTensor
 from tensorboardX import SummaryWriter
 from train.dataset import freiburgForest, freiburgForest1
 from train.transform import Colorize, Relabel
-from train.erfnet import ERFNet, ERFNet_regression
+from train.erfnet import ERFNet, ERFNet_regression,ERFNet_regression_simplified
 from train.iouEval import iouEval, getColorEntry
 from shutil import copyfile
 
@@ -310,10 +310,16 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
         # print(outputs_1.shape)
         outputs_1 = outputs_1.numpy().transpose(1, 2, 0).astype(np.float32)
         # print(outputs_1.shape)
-        outputs_2 = outputs_2[0, 1, :, :].cpu().data.unsqueeze(0)
+        outputs_2 = outputs_2[0, 0, :, :].cpu().data.unsqueeze(0)
+        # print(outputs_2.shape)
         outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
+
+        min_pixel, max_pixel, _, _ = cv2.minMaxLoc(outputs_2)
+        print(min_pixel, '   ', max_pixel)
+
         outputs_2 = cv2.normalize(outputs_2, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
         outputs_2 = outputs_2[:,:,np.newaxis]
+
         # output = output * 255
 
         output_combine = np.zeros((512,1024,1))
@@ -321,7 +327,7 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
         for row in range(outputs_1.shape[0]):
             for col in range(outputs_1.shape[1]):
                 if outputs_1[row][col][0] == 2:
-                    output_combine[row][col][0] = int(outputs_2[row][col][0]*255)
+                    output_combine[row][col][0] = int(min(255,outputs_2[row][col][0]*255))
                 elif outputs_1[row][col][0] == 3:
                     output_combine[row][col][0] = -1
                 else:
@@ -335,12 +341,12 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
         # print(output_combine.shape, images.shape)
         fileSave = data_savedir + filename[0].split("freiburg_forest_annotated")[1]
         os.makedirs(os.path.dirname(fileSave), exist_ok=True)
-        output = cv2.addWeighted(images, 0.4, output_combine, 0.6, 0)
+        # output = cv2.addWeighted(images, 0.4, output_combine, 0.6, 0)
 
 
         # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(output)
         # print(min_pixel,'   ', max_pixel)
-        cv2.imwrite(fileSave,output)
+        cv2.imwrite(fileSave,output_combine)
 
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     torch.save(state, filenameCheckpoint)
@@ -382,7 +388,7 @@ def main():
         os.makedirs(model_savedir)
 
     #Load both Models
-    model_geoMat = ERFNet_regression()
+    model_geoMat = ERFNet_regression_simplified()
     model_freiburgForest = ERFNet(4)
     # copyfile(args.model + ".py", savedir + '/' + args.model + ".py") # 在训练时候可以加上
     
@@ -416,7 +422,15 @@ def main():
                  continue
             own_state[name].copy_(param)
         return model
-    model_geoMat = load_my_state_dict(model_geoMat, torch.load(weight_geoMat))
+    def load_my_checkpoint(model, state_dict):
+        # state_dict = state_dict["state_dict"]
+        own_state = model.state_dict()
+        for name, param in state_dict.items():
+            if name not in own_state:
+                 continue
+            own_state[name].copy_(param)
+        return model
+    model_geoMat = load_my_checkpoint(model_geoMat, torch.load(weight_geoMat))
     model_freiburgForest = load_my_state_dict(model_freiburgForest, torch.load(weight_freigburgForest))
 
 
@@ -426,5 +440,5 @@ def main():
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## TODO
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"  ## TODO
     main()
