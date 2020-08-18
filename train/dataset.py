@@ -164,11 +164,11 @@ class geoMat(Dataset):
         self.filenames = []
         self.filenamesGt = []
         for dir_1 in os.listdir(self.images_root):
-            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1) ] #只选择800*800的进行训练 if ("800x800" in f) or ("400x400" in f)
+            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)] #只选择800*800的进行训练 if ("800x800" in f) or ("400x400" in f)
             self.filenames.extend(temp_1)
         self.filenames.sort()
         for dir_1 in os.listdir(self.labels_root):
-            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1) ] #只选择800*800的进行训练
+            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)] #只选择800*800的进行训练
             self.filenamesGt.extend(temp_2)
         self.filenamesGt.sort()
         assert len(self.filenames) == len(self.filenamesGt)
@@ -202,6 +202,82 @@ class geoMat(Dataset):
     def __len__(self):
         return len(self.filenames)
 
+DATA_CLASS_NAMES = {
+    "Asphalt": 0,
+    "Cement - Granular": 1,
+    "Cement - Smooth": 2,
+    "Concrete - Precast": 3,
+    "Foliage": 4,
+    "Grass": 5,
+    "Gravel": 6,
+    "Paving": 7,
+    "Soil - Compact": 8,
+    "Soil - Dirt and Vegetation": 9,
+    "Soil - Loose": 10,
+    "Soil - Mulch": 11,
+    "Stone - Granular": 12,
+    "Wood": 13
+}
+class multitask_geoMat(Dataset):
+
+    def __init__(self, root, co_transform=None, subset='train'):
+        self.images_root = os.path.join(root, subset+'/rgb')
+        self.labels_traversability_root = os.path.join(root, subset+'/GT_color_version_3')
+        self.labels_depth_root = os.path.join(root, subset+'/depth')
+        self.filenames = []
+        self.filenamesGt = []
+        self.filenamesDepth = []
+        self.filenamesClass = []
+
+        for dir_1 in os.listdir(self.images_root):
+            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)] #只选择800*800的进行训练 if ("800x800" in f) or ("400x400" in f)
+            labels_class = [DATA_CLASS_NAMES.get(dir_1) for f in os.listdir(self.images_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)]
+            self.filenames.extend(temp_1)
+            self.filenamesClass.extend(labels_class)
+        self.filenames.sort()
+
+        for dir_1 in os.listdir(self.labels_traversability_root):
+            temp_2 = [os.path.join(self.labels_traversability_root+"/"+dir_1, f) for f in os.listdir(self.labels_traversability_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)] #只选择800*800的进行训练
+            self.filenamesGt.extend(temp_2)
+        self.filenamesGt.sort()
+
+        for dir_1 in os.listdir(self.labels_depth_root):
+            temp_3 = [os.path.join(self.labels_traversability_root+"/"+dir_1, f) for f in os.listdir(self.labels_depth_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)] #只选择800*800的进行训练
+            self.filenamesDepth.extend(temp_3)
+        self.filenamesDepth.sort()
+
+        assert (len(self.filenames) == len(self.filenamesGt)) and (len(self.filenames) == len(self.filenamesDepth))
+        self.co_transform = co_transform  # ADDED THIS
+
+        # image = np.array(cv2.imread(self.filenames[1000])).astype(np.float32)
+        # label = np.array(cv2.imread(self.filenamesGt[1000], cv2.IMREAD_GRAYSCALE)).astype(np.float32)
+        # image, label = self.co_transform(image, label)
+        # print(1111)
+
+
+
+    def __getitem__(self, index):
+        filename = self.filenames[index]
+        filenameGt = self.filenamesGt[index]
+        filenameDepth = self.filenamesDepth[index]
+        filenamesClass = self.filenamesClass[index]
+
+        image = np.array(cv2.imread(filename)).astype(np.float32)
+
+        label_traver = np.array(cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)).astype(np.float32)
+        label_depth = np.array(cv2.imread(filenameDepth, cv2.IMREAD_GRAYSCALE)).astype(np.float32)
+        if self.co_transform is not None:
+            image, label = self.co_transform(image, label_traver, label_depth)
+        # 用于检查训练数据的大小分布
+        # image = label.numpy().transpose(1,2,0)
+        # #gray = cv2.cvtColor(np.array(image),cv2.COLOR_RGB2GRAY)
+        # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(image)
+        # print(min_pixel, '   ', max_pixel)
+
+        return image, label_traver, label_depth, filenamesClass, filenameGt
+
+    def __len__(self):
+        return len(self.filenames)
 
 
 if __name__ == "__main__":
