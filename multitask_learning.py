@@ -33,16 +33,18 @@ class MyCoTransform(object):
         self.rescale = rescale
 
         pass
-    def __call__(self, input, target):
+    def __call__(self, input, target_traver, target_depth, label_class):
         # do something to both images
         # input = Resize(self.size, Image.BILINEAR)(input)
         # target = Resize(self.size, Image.NEAREST)(target)
         input = cv2.resize(input,self.size,interpolation=cv2.INTER_LINEAR)
-        target = cv2.resize(target,self.size,interpolation=cv2.INTER_NEAREST)
+        target_traver = cv2.resize(target_traver,self.size,interpolation=cv2.INTER_NEAREST)
+        target_depth = cv2.resize(target_depth, self.size, interpolation=cv2.INTER_NEAREST)
 
         if self.rescale:
             input = input/255.
-            target = target/255.
+            target_traver = target_traver/255.
+            target_depth = target_depth/255.
 
         if(self.augment):
             # Random hflip
@@ -51,7 +53,8 @@ class MyCoTransform(object):
                 # input = input.transpose(Image.FLIP_LEFT_RIGHT)
                 # target = target.transpose(Image.FLIP_LEFT_RIGHT)
                 input = cv2.flip(input,1)
-                target = cv2.flip(target,1)
+                target_traver = cv2.flip(target_traver, 1)
+                target_depth = cv2.flip(target_depth, 1)
             
             #Random translation 0-2 pixels (fill rest with padding
             # transX = random.randint(-2, 2)
@@ -63,8 +66,10 @@ class MyCoTransform(object):
             # target = target.crop((0, 0, target.size[0]-transX, target.size[1]-transY))
 
         input = ToTensor()(input)
-        target = torch.from_numpy(np.array(target)).unsqueeze(0)
-        return input, target
+        target_traver = torch.from_numpy(np.array(target_traver)).unsqueeze(0)
+        target_depth = torch.from_numpy(np.array(target_depth)).unsqueeze(0)
+        label_class = torch.from_numpy(np.array(label_class))
+        return input, target_traver, target_depth, label_class
 
 # build the loss function nagetive Gaussian log-likelihood loss
 class GaussianLogLikelihoodLoss(torch.nn.Module):
@@ -127,16 +132,22 @@ class Multi_loss(torch.nn.Module):
         output_traversability, output_depth, output_class = outputs[0], outputs[1], outputs[2]
         target_traversability, target_depth, target_class = targets[0], targets[1], targets[2]
 
-        loss_1_1 = self.l2Loss(output_traversability, output_traversability)*torch.exp(-self.log_vars[0])
+        loss_1_1 = self.l2Loss(output_traversability, target_traversability)*torch.exp(-self.log_vars[0])
         loss_1_2 = self.log_vars[0]
         loss_1_3 = torch.mean(torch.max(torch.zeros(target_traversability.shape).cuda(), output_traversability**2 - output_traversability))
         loss_1 = loss_1_1 + loss_1_2 + loss_1_3
 
         loss_2 = self.l1Loss(output_depth, target_depth)*torch.exp(-self.log_vars[1]) + self.log_vars[1]
         loss_3 = 0.5*self.crossEntropyLoss(output_class, target_class)*torch.exp(-self.log_vars[2]) + self.log_vars[2]
+        # print(loss_1_1, '  ',loss_1_2,'  ',loss_1_3)
         # print("loss1: ",loss_1)
         # print('loss2: ',loss_2)
         # print('loss3: ',loss_3)
+        # print(target_depth)
+        # print(output_depth)
+        # print(output_class, target_class)
+        # print(self.log_vars)
+
         return loss_1 + loss_2 + loss_3
 
 def train(savedir, model ,dataloader_train,dataloader_eval,criterion,optimizer, args):
@@ -177,7 +188,6 @@ def train(savedir, model ,dataloader_train,dataloader_eval,criterion,optimizer, 
     for epoch in range(start_epoch, args.num_epochs+1):
         print("----- TRAINING - EPOCH", epoch, "-----")
 
-        scheduler.step(epoch)    
 
         epoch_loss = []
         time_train = []
@@ -201,28 +211,40 @@ def train(savedir, model ,dataloader_train,dataloader_eval,criterion,optimizer, 
                 label_traver = label_traver.cuda()
                 label_depth = label_depth.cuda()
                 label_class = label_class.cuda()
-            #print("image: ", images.size())
-            #print("labels: ", labels.size())
+
+            # print("image: ", images.size())
+            # print("label_traver: ", label_traver.size())
+            # print("label_depth:  ", label_depth.size())
+            # print("label_class:  ", label_class.size())
+
             inputs = Variable(images)
             targets_traver = Variable(label_traver)
             targets_depth = Variable(label_depth)
             targets_class = Variable(label_class)
             outputs = model(inputs)
 
+
+            # output_traversability = output_traversability.cuda()
+            # output_depth = output_depth.cuda()
+            # output_class = output_class.cuda()
+            # outputs = [output_traversability, output_depth, output_class]
             # print("output: ", outputs.size()) #TODO
             # print("targets", np.unique(targets[:, 0].cpu().data.numpy()))
+            # print("label_traver: ", outputs[0].size())
+            # print("label_depth:  ", outputs[1].size())
+            # print("label_class:  ", outputs[2].size())
 
             optimizer.zero_grad()
-            loss = criterion(outputs, [targets_traver[:, 0], targets_depth[:, 0], targets_class])
-
+            loss = criterion(outputs, [targets_traver, targets_depth, targets_class])
             loss.backward()
             optimizer.step()
-
-            epoch_loss.append(loss)
+            scheduler.step(epoch)
+            # print("loss: ", loss)
+            epoch_loss.append(loss.item())
             time_train.append(time.time() - start_time)
 
             if args.steps_loss > 0 and step % args.steps_loss == 0:
-                average = sum(epoch_loss) / len(epoch_loss)
+                average = (sum(epoch_loss) / len(epoch_loss))
                 print(f'loss: {average:0.4} (epoch: {epoch}, step: {step})', 
                         "// Avg time/img: %.4f s" % (sum(time_train) / len(time_train) / args.batch_size))
 
@@ -252,8 +274,8 @@ def train(savedir, model ,dataloader_train,dataloader_eval,criterion,optimizer, 
             with torch.no_grad():
                 outputs = model(inputs)
 
-                loss = criterion(outputs, [targets_traver[:, 0], targets_depth[:, 0], targets_class])
-            epoch_loss_val.append(loss.data)
+                loss = criterion(outputs, [targets_traver, targets_depth, targets_class])
+            epoch_loss_val.append(loss.item())
             time_val.append(time.time() - start_time)
 
             if args.steps_loss > 0 and step % args.steps_loss == 0:
@@ -311,7 +333,7 @@ def test(filenameSave, model, dataloader_test, args):
             outputs = model(inputs)
 
         # print(outputs.shape)
-        label = outputs[:,0,:,:].cpu().data
+        label = outputs[0][:,0,:,:].cpu().data
         # print(label.shape)
         #label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
         label_color = (label.unsqueeze(1))
@@ -328,7 +350,7 @@ def test(filenameSave, model, dataloader_test, args):
         # print(images.shape)
         # print(label_save.shape)
         for i in range(len(filename)):
-            fileSave = '../eval/'+ args.savedir + filename[i].split("material_dataset_v2")[1]
+            fileSave = 'eval/'+ args.savedir + filename[i].split("material_dataset_v2")[1]
             # print(fileSave)
             os.makedirs(os.path.dirname(fileSave), exist_ok=True)
             min_pixel, max_pixel, _, _ = cv2.minMaxLoc(label_save[i])
@@ -355,7 +377,7 @@ def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
         torch.save(state, filenameBest)
 
 def main(args):
-    savedir = f'../save/{args.savedir}'
+    savedir = f'save/{args.savedir}'
     if not os.path.exists(savedir):
         os.makedirs(savedir)
     with open(savedir + '/opts.txt', "w") as myfile:
@@ -375,12 +397,12 @@ def main(args):
     loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
     loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
 
-    savedir = f'../save/{args.savedir}'
+    savedir = f'save/{args.savedir}'
 
     # 定义task dependent log_variance 来进行multi-task learning
-    log_var_a = torch.zeros((1,), requires_grad=True)
-    log_var_b = torch.zeros((1,), requires_grad=True)
-    log_var_c = torch.zeros((1,),requires_grad=True)
+    log_var_a = torch.zeros((1,), requires_grad=True, device="cuda")
+    log_var_b = torch.zeros((1,), requires_grad=True, device="cuda")
+    log_var_c = torch.zeros((1,),requires_grad=True, device="cuda")
     log_vars = [log_var_a, log_var_b, log_var_c]
     params = ([p for p in model.parameters()] + log_vars)
     #optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=2e-4)     ## scheduler 1
@@ -403,29 +425,30 @@ def main(args):
     #         own_state[name].copy_(param)
     #     return model
     # model = load_my_state_dict(model, torch.load(model_dir))
-    filenameSave = "./eval/" + args.savedir
+    filenameSave = "eval/" + args.savedir
     os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
     test(filenameSave, model, loader_val, args)
 
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## todo
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
+
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
-    parser.add_argument('--model', default="erfnet")
     parser.add_argument('--state')
 
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--datadir', default="/mrtstorage/users/pan/material_dataset_v2/")
     parser.add_argument('--size', type=int, default=104)
-    parser.add_argument('--num-epochs', type=int, default=50)
+    parser.add_argument('--num-epochs', type=int, default=300)
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="geoMat_regression_13")
+    parser.add_argument('--savedir', default="multitask_learning_1")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="")
     parser.add_argument('--resume', action='store_true')    #Use this flag to load last checkpoint for training  

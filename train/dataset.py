@@ -242,10 +242,10 @@ class multitask_geoMat(Dataset):
         self.filenamesGt.sort()
 
         for dir_1 in os.listdir(self.labels_depth_root):
-            temp_3 = [os.path.join(self.labels_traversability_root+"/"+dir_1, f) for f in os.listdir(self.labels_depth_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)] #只选择800*800的进行训练
+            temp_3 = [os.path.join(self.labels_depth_root+"/"+dir_1, f) for f in os.listdir(self.labels_depth_root+"/"+dir_1) if ("800x800" in f) or ("400x400" in f)] #只选择800*800的进行训练
             self.filenamesDepth.extend(temp_3)
         self.filenamesDepth.sort()
-
+        # print(self.filenamesDepth)
         assert (len(self.filenames) == len(self.filenamesGt)) and (len(self.filenames) == len(self.filenamesDepth))
         self.co_transform = co_transform  # ADDED THIS
 
@@ -255,26 +255,26 @@ class multitask_geoMat(Dataset):
         # print(1111)
 
 
-
     def __getitem__(self, index):
         filename = self.filenames[index]
         filenameGt = self.filenamesGt[index]
         filenameDepth = self.filenamesDepth[index]
-        filenamesClass = self.filenamesClass[index]
+        label_class = self.filenamesClass[index]
 
         image = np.array(cv2.imread(filename)).astype(np.float32)
 
         label_traver = np.array(cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)).astype(np.float32)
         label_depth = np.array(cv2.imread(filenameDepth, cv2.IMREAD_GRAYSCALE)).astype(np.float32)
+        # print(label_depth)
         if self.co_transform is not None:
-            image, label = self.co_transform(image, label_traver, label_depth)
+            image, label_traver, label_depth, label_class = self.co_transform(image, label_traver, label_depth, label_class)
         # 用于检查训练数据的大小分布
         # image = label.numpy().transpose(1,2,0)
         # #gray = cv2.cvtColor(np.array(image),cv2.COLOR_RGB2GRAY)
         # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(image)
         # print(min_pixel, '   ', max_pixel)
-
-        return image, label_traver, label_depth, filenamesClass, filenameGt
+        # print(label_depth)
+        return image, label_traver, label_depth, label_class, filenameGt
 
     def __len__(self):
         return len(self.filenames)

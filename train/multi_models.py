@@ -192,7 +192,7 @@ class Classifier(nn.Module):
         self.classifier.append(nn.BatchNorm2d(64, eps=1e-03))
         self.classifier.append(nn.Dropout2d(0.3))
         self.classifier.append(nn.ReLU())
-        self.classifier = nn.Sequential(self.classifier)
+        self.classifier = nn.Sequential(*self.classifier)
 
         self.linear = nn.Linear(64, num_classes)
 
