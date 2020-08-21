@@ -40,7 +40,7 @@ class Colorize:
         # print(gray_image.shape, color_image.shape)
         for label in range(0, len(self.cmap)):
             mask = gray_image[:,:,0] == label
-            is_sky = gray_image[:,:,0] == -1
+            is_sky = gray_image[:,:,0] < 0
             color_image[0][mask] = self.cmap[label][0]
             color_image[1][mask] = self.cmap[label][1]
             color_image[2][mask] = self.cmap[label][2]
@@ -81,14 +81,6 @@ class MyCoTransform(object):
 
         input = ToTensor()(input)
         target = torch.from_numpy(np.array(target)).long().unsqueeze(0)
-
-        # target = Relabel(0, 1)(target)
-        # target = Relabel(35, 2)(target)
-        # target = Relabel(96, 2)(target)
-        # target = Relabel(99, 4)(target)
-        # target = Relabel(149, 3)(target)
-        # target = Relabel(170, 6)(target)
-        # target = Relabel(255, 5)(target)
 
         return input, target
 
@@ -294,62 +286,50 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
     data_savedir = f'eval/{savedir}'
     model_geoMat.eval()
     model_freiburgForest.eval()
+
+    coef = np.ones([512, 1024, 5]).astype(np.float32)
+    traversability = (0,1.0,0.6,0.8,-1)
+    for i in range(5):
+        coef[:,:,i] = coef[:,:,i]*traversability[i]
+
+    # traversability = {"0": 0, "1": 1, "2": 0.6, "3": 0.8, "4":-1}
     for step, (images, labels, filename) in enumerate(dataloader_test):
         if (cuda):
             images = images.cuda()
-            #labels = labels.cuda()
+
         inputs = Variable(images)
-        #targets = Variable(labels)
+
+        start_time = time.time()
         with torch.no_grad():
             outputs_1 = model_freiburgForest(inputs)
             outputs_2 = model_geoMat(inputs)
             outputs_2 = outputs_2[0]   # TODO
         # batch size = 1,结果处理成可以显示的格式
         # print(inputs.shape)
-        outputs_1_confidence = outputs_1[0].cpu().numpy()
+        print("model inference time: %.2f s" % (time.time() - start_time))
+        start_time = time.time()
         outputs_1 = outputs_1[0].max(0)[1].byte().cpu().data.unsqueeze(0)
-        # outputs_1 = Colorize()(outputs_1)
         # print(outputs_1.shape)
-        outputs_1 = outputs_1.numpy().transpose(1, 2, 0).astype(np.float32)
+        outputs_1 = outputs_1.numpy().transpose(1, 2, 0).astype(np.int64)
         # print(outputs_1.shape)
+
+        outputs_1 = np.take(coef, outputs_1)
+
         outputs_2 = outputs_2[0, 0, :, :].cpu().data.unsqueeze(0)
         # print(outputs_2.shape)
         outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
 
-        min_pixel, max_pixel, _, _ = cv2.minMaxLoc(outputs_2)
-        print(min_pixel, '   ', max_pixel)
-
+        outputs_combine = (outputs_1*outputs_2*255).astype(np.int16)
+        # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(outputs_combine)
+        # print(min_pixel,'   ', max_pixel)
         # outputs_2 = cv2.normalize(outputs_2, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
         # outputs_2 = outputs_2[:,:,np.newaxis]
 
-        # output = output * 255
+        print("output processing time 1: %.2f s" % (time.time() - start_time))
 
-        traversability = {"0":0,"1":1,"2":0.6, "3":0.8}
-        # traversability = np.array([[0,1,0.6,0.8]])
-        output_combine = np.zeros((512,1024,1))
-        # print(11111111111111111,outputs_1.shape,outputs_2.shape,output_combine.shape)
-        for row in range(outputs_1.shape[0]):
-            for col in range(outputs_1.shape[1]):
-                # if outputs_1[row][col][0] == 2 or outputs_1[row][col][0] == 3:
-                #     # print(row, col)
-                #     # print(" confidence:  ",outputs_1_confidence[:4,row,col])
-                #     #print(' traver:  ',traversability.shape)
-                #     confidence = cv2.normalize(outputs_1_confidence[:4, row, col],None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-                #     # print(" outputs_1_confidence: ", confidence.shape)
-                #     traver_confidence = traversability.dot(confidence)
-                #     # print("traver_confidence", traver_confidence)
-                #     output_combine[row][col][0] = int(min(255, outputs_2[row][col][0] * 255) * traver_confidence)
-                if outputs_1[row][col][0] == 2: # TODO
-                    output_combine[row][col][0] = int(min(255,outputs_2[row][col][0]*255)*traversability["2"])
-                elif outputs_1[row][col][0] == 3:
-                    output_combine[row][col][0] = int(min(255,outputs_2[row][col][0]*255)*traversability["3"])
-                elif outputs_1[row][col][0] == 4:
-                    output_combine[row][col][0] = -1
-                else:
-                    output_combine[row][col][0] = int(outputs_1[row][col][0] * 255)
-        # print(output_combine)
-        output_combine = Colorize()(output_combine).transpose(1, 2, 0).astype(np.float32)
-
+        start_time = time.time()
+        outputs_combine = Colorize()(outputs_combine).transpose(1, 2, 0).astype(np.float32)
+        print("colorize time: %.2f s" % (time.time() - start_time))
         images = images.cpu().numpy()
         images = images[0].transpose(1, 2, 0)*255
 
@@ -361,7 +341,79 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
 
         # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(output)
         # print(min_pixel,'   ', max_pixel)
-        cv2.imwrite(fileSave,output_combine)
+        cv2.imwrite(fileSave,outputs_combine)
+
+def save_video(model_geoMat, model_freiburgForest, cfg):
+    image_folder = "/mrtstorage/users/pan/freiburg_forest_multispectral_annotated/raw_data/freiburg_forest_raw/2016-02-26-15-05-05/"
+    video_save_path = "/home/pan/repository/erfnet_pytorch/eval/"
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(video_save_path+'output.avi', fourcc, 30.0, (1024, 512))
+
+    cuda = cfg['cuda']
+    model_geoMat.eval()
+    model_freiburgForest.eval()
+
+    coef = np.ones([512, 1024, 5]).astype(np.float32)
+    traversability = (0, 1.0, 0.6, 0.8, -1)
+    for i in range(5):
+        coef[:, :, i] = coef[:, :, i] * traversability[i]
+
+    paths = []
+    for root, dirs, files in os.walk(image_folder, topdown=True):
+        for file in files:
+            image_path = os.path.join(image_folder, file)
+            paths.append(image_path)
+    paths.sort(key = lambda x: int(x[111:-4]))
+
+    for path in paths:
+        # print(path)
+        start_time = time.time()
+
+        image = cv2.imread(path).astype(np.float32)
+        image = cv2.resize(image,(1024,512),interpolation=cv2.INTER_LINEAR)
+        image = image/255.
+        image = ToTensor()(image).unsqueeze(0)
+        if (cuda):
+            image = image.cuda()
+
+        input = Variable(image)
+
+        # start_time = time.time()
+        with torch.no_grad():
+            outputs_1 = model_freiburgForest(input)
+            outputs_2 = model_geoMat(input)
+            outputs_2 = outputs_2[0]  # TODO
+
+        #print("model inference time: %.2f s" % (time.time() - start_time))
+        # start_time = time.time()
+        outputs_1 = outputs_1[0].max(0)[1].byte().cpu().data.unsqueeze(0)
+        # print(outputs_1.shape)
+        outputs_1 = outputs_1.numpy().transpose(1, 2, 0).astype(np.int64)
+        # print(outputs_1.shape)
+
+        outputs_1 = np.take(coef, outputs_1)
+
+        outputs_2 = outputs_2[0, 0, :, :].cpu().data.unsqueeze(0)
+        # print(outputs_2.shape)
+        outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
+
+        outputs_combine = (outputs_1 * outputs_2 * 255).astype(np.int16)
+        # min_pixel, max_pixel, _, _ = cv2.minMaxLoc(outputs_combine)
+        # print(min_pixel,'   ', max_pixel)
+
+        #print("output processing time 1: %.2f s" % (time.time() - start_time))
+
+        # start_time = time.time()
+        outputs_combine = Colorize()(outputs_combine).transpose(1, 2, 0).astype(np.uint8)
+
+        image = image.cpu().numpy()
+        image = (image[0].transpose(1, 2, 0)*255).astype(np.uint8)
+        # print(image.shape)
+        # print(outputs_combine.shape)
+        output = cv2.addWeighted(image, 0.4, outputs_combine, 0.6, 0)
+        print("time: %.2f s" % (time.time() - start_time))
+        out.write(output)
+    out.release()
 
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     torch.save(state, filenameCheckpoint)
@@ -451,10 +503,11 @@ def main():
 
 
     loader_test = DataLoader(dataset_val, num_workers=num_workers, batch_size=1, shuffle=False)
-    test(model_geoMat, model_freiburgForest, loader_test, cfg)
+    # test(model_geoMat, model_freiburgForest, loader_test, cfg)
+    save_video(model_geoMat, model_freiburgForest, cfg)
 
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## TODO
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## TODO
     main()
