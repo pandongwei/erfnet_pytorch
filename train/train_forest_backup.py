@@ -23,7 +23,7 @@ from iouEval import iouEval, getColorEntry
 
 from shutil import copyfile
 
-NUM_CLASSES = 4 #pascal=22, cityscapes=20
+NUM_CLASSES = 5 #pascal=22, cityscapes=20
 
 color_transform = Colorize(NUM_CLASSES)
 
@@ -61,13 +61,13 @@ class MyCoTransform(object):
         # target = Relabel(150, 3)(target) #草地
         # target = Relabel(170, 6)(target) #沙地
         # target = Relabel(255, 5)(target) # void
-        # 0->可通行，1->不可通行，2->待判断，3->天空
+        # 0->可通行，1->不可通行，2,3->待判断，4->天空
         target = Relabel(0, 0)(target)  #障碍
         target = Relabel(35, 0)(target) #树
         target = Relabel(96, 0)(target) #树
-        target = Relabel(99, 3)(target) #天
+        target = Relabel(99, 4)(target) #天
         target = Relabel(149, 2)(target) #草地
-        target = Relabel(170, 2)(target) #沙地
+        target = Relabel(170, 3)(target) #沙地 2
         target = Relabel(255, 0)(target) # void
 
         return input, target
@@ -406,26 +406,28 @@ def main(args):
             model = torch.nn.DataParallel(model).cuda()
         #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
     # TODO 加载cityscape的训练权重，然后再做迁移学习
-    weightspath = "../save/cityscape_6classes_2/model_best.pth"
-    # def load_my_state_dict(model, state_dict):  #custom function to load model when not all dict elements
-    #     own_state = model.state_dict()
-    #     for name, param in state_dict.items():
-    #         if name not in own_state:
-    #              continue
-    #         own_state[name].copy_(param)
-    #     return model
-    # model = load_my_state_dict(model, torch.load(weightspath))
-    weights_cityscape = torch.load(weightspath)
-    # 删除掉不匹配的权重层
-    del weights_cityscape['module.decoder.output_conv.weight']
-    del weights_cityscape['module.decoder.output_conv.bias']
-    model.load_state_dict(weights_cityscape, strict=False)
+    # weightspath = "../save/cityscape_6classes_2/model_best.pth"
+    # # def load_my_state_dict(model, state_dict):  #custom function to load model when not all dict elements
+    # #     own_state = model.state_dict()
+    # #     for name, param in state_dict.items():
+    # #         if name not in own_state:
+    # #              continue
+    # #         own_state[name].copy_(param)
+    # #     return model
+    # # model = load_my_state_dict(model, torch.load(weightspath))
+    # weights_cityscape = torch.load(weightspath)
+    # # 删除掉不匹配的权重层
+    # del weights_cityscape['module.decoder.output_conv.weight']
+    # del weights_cityscape['module.decoder.output_conv.bias']
+    # model.load_state_dict(weights_cityscape, strict=False)
 
     model = train(args, model, False)   #Train decoder
+    save_path = f'../save/{args.savedir}/weight_final.pth'
+    torch.save(model.state_dict(), save_path)
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -436,11 +438,11 @@ if __name__ == '__main__':
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) # 150
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=8)
+    parser.add_argument('--batch-size', type=int, default=1)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="feriburgForest_5")
+    parser.add_argument('--savedir', default="feriburgForest_2")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="")
     parser.add_argument('--visualize', action='store_true',default=False)

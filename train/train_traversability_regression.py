@@ -94,23 +94,10 @@ class GaussianLogLikelihoodLoss(torch.nn.Module):
         # print('loss2: ',loss_2)
         return 0.5*(loss_1 + 0.01*loss_2)
 
-# 这个也不行
-class GaussianLogLikelihoodLoss_1(torch.nn.Module):
-    def __init__(self):
-        super(GaussianLogLikelihoodLoss_1,self).__init__()
-
-    def forward(self, outputs, targets):
-        mean, var = outputs[:,0,:,:], outputs[:,1,:,:]
-        loss_1 = torch.mean(torch.pow(mean - targets,2)/(2*torch.pow(var,2)))
-        loss_2 = torch.mean(torch.max(torch.zeros(var.shape).cuda(), 0.5*torch.log(var**2)))
-        loss_3 = torch.mean(torch.max(torch.zeros(mean.shape).cuda(), mean**2 - mean))
-        # print("loss1: ",loss_1)
-        # print('loss2: ',loss_2)
-        return 0.5*(loss_1 + 0.01*loss_2) + 0.5*loss_3
 # L1 loss + punlishment
-class GaussianLogLikelihoodLoss_2(torch.nn.Module):
+class L1loss_punlishment(torch.nn.Module):
     def __init__(self):
-        super(GaussianLogLikelihoodLoss_2,self).__init__()
+        super(L1loss_punlishment,self).__init__()
 
     def forward(self, outputs, targets):
         mean, var = outputs[:,0,:,:], outputs[:,1,:,:]
@@ -120,9 +107,9 @@ class GaussianLogLikelihoodLoss_2(torch.nn.Module):
         # print('loss2: ',loss_2)
         return 0.5*(loss_1 + 2*loss_3)
 # modified nagetive Gaussian log-likelihood loss with punishment
-class GaussianLogLikelihoodLoss_3(torch.nn.Module):
+class GaussianLogLikelihoodLoss_punlishment(torch.nn.Module):
     def __init__(self):
-        super(GaussianLogLikelihoodLoss_3,self).__init__()
+        super(GaussianLogLikelihoodLoss_punlishment,self).__init__()
 
     def forward(self, outputs, targets):
         mean, log_var2 = outputs[:,0,:,:], outputs[:,1,:,:]
@@ -131,7 +118,7 @@ class GaussianLogLikelihoodLoss_3(torch.nn.Module):
         loss_3 = torch.mean(torch.max(torch.zeros(mean.shape).cuda(), mean**2 - mean))
         # print("loss1: ",loss_1)
         # print('loss2: ',loss_2)
-        return 0.5*(loss_1 + loss_2 + 2*loss_3)
+        return loss_1 + loss_2 + 2*loss_3
 
 
 def train(savedir, model ,dataloader_train,dataloader_eval,criterion,optimizer, args, enc=False):
@@ -383,7 +370,7 @@ def test(filenameSave, model, dataloader_test, args):
             min_pixel, max_pixel, _, _ = cv2.minMaxLoc(label_save[i])
             print(min_pixel,'   ', max_pixel)
             # output = cv2.normalize(label_save[i], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-            # output = label_save[i]
+            output = label_save[i]
             output = output*255
             cv2.imwrite(fileSave,output)
 
@@ -432,7 +419,7 @@ def main(args):
 
     savedir = f'../save/{args.savedir}'
 
-    criterion = GaussianLogLikelihoodLoss_2() #TODO 尝试不同的loss
+    criterion = L1loss_punlishment() #TODO 尝试不同的loss
     # 尝试一下L1 loss，结果说明这个效果很不好
     # criterion = torch.nn.L1Loss()
     #optimizer = Adam(model.parameters(), 5e-4, (0.9, 0.999),  eps=1e-08, weight_decay=2e-4)     ## scheduler 1

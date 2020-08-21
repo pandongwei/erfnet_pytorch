@@ -222,7 +222,7 @@ class multitask_geoMat(Dataset):
 
     def __init__(self, root, co_transform=None, subset='train'):
         self.images_root = os.path.join(root, subset+'/rgb')
-        self.labels_traversability_root = os.path.join(root, subset+'/GT_color_version_3')
+        self.labels_traversability_root = os.path.join(root, subset+'/GT_color_version_1')
         self.labels_depth_root = os.path.join(root, subset+'/depth')
         self.filenames = []
         self.filenamesGt = []
