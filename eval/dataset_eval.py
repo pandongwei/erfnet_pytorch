@@ -148,11 +148,11 @@ class geoMat(Dataset):
         self.filenames = []
         self.filenamesGt = []
         for dir_1 in os.listdir(self.images_root):
-            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1)]
+            temp_1= [os.path.join(self.images_root+"/"+dir_1, f) for f in os.listdir(self.images_root+"/"+dir_1) if '800x800' in f]
             self.filenames.extend(temp_1)
         self.filenames.sort()
         for dir_1 in os.listdir(self.labels_root):
-            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1)]
+            temp_2 = [os.path.join(self.labels_root+"/"+dir_1, f) for f in os.listdir(self.labels_root+"/"+dir_1) if '800x800' in f]
             self.filenamesGt.extend(temp_2)
         self.filenamesGt.sort()
 

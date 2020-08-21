@@ -48,7 +48,7 @@ def main(args):
 
     modelpath = args.loadDir + args.loadModel
     #weightspath = args.loadDir + args.loadWeights #TODO
-    weightspath = "/home/pan/repository/erfnet_pytorch/save/geoMat_1/model_best.pth"
+    weightspath = "/home/pan/repository/erfnet_pytorch/save/geoMat_2/model_best.pth"
     # print ("Loading model: " + modelpath)
     print ("Loading weights: " + weightspath)
 
@@ -104,7 +104,7 @@ def main(args):
         #label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
         label_color = (label.unsqueeze(0))
         # print(label_color.shape)
-        filenameSave = "./getMat_1/" + filename[0].split("material_dataset_v2")[1]
+        filenameSave = "./getMat_2/" + filename[0].split("material_dataset_v2")[1]
         os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
         #image_transform(label.byte()).save(filenameSave)
 
@@ -119,7 +119,7 @@ def main(args):
         # print(images.shape)
         # print(label_save.shape)
         plt.figure(figsize=(10.4,10.4), dpi=10)
-        plt.imshow(images)
+        # plt.imshow(images)
         plt.imshow(label_save,alpha=0.6,cmap='gray')
         plt.axis('off')
         # plt.show()

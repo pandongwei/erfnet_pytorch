@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, CenterCrop, Normalize, Resize
 from torchvision.transforms import ToTensor, ToPILImage
 
-from dataset import freiburgForest
+from dataset_eval import freiburgForest
 from erfnet import ERFNet
 from transform import Relabel, ToLabel, Colorize
 
@@ -24,7 +24,7 @@ import visdom
 
 
 NUM_CHANNELS = 3
-NUM_CLASSES = 7
+NUM_CLASSES = 4
 
 image_transform = ToPILImage()
 input_transform_cityscapes = Compose([
@@ -48,7 +48,7 @@ def main(args):
 
     modelpath = args.loadDir + args.loadModel
     #weightspath = args.loadDir + args.loadWeights #TODO
-    weightspath = "../save/feriburgForest_1/model_best_1.pth"
+    weightspath = "../save/feriburgForest_3/model_best.pth"
     print ("Loading model: " + modelpath)
     print ("Loading weights: " + weightspath)
 
@@ -98,7 +98,7 @@ def main(args):
         #targets = Variable(labels)
         with torch.no_grad():
             outputs = model(inputs)
-
+        print(outputs.shape)
         label = outputs[0].max(0)[1].byte().cpu().data
         #label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
         label_color = Colorize()(label.unsqueeze(0))
@@ -106,10 +106,11 @@ def main(args):
         filenameSave = "./freiburgforest_1/" + filename[0].split("freiburg_forest_annotated/")[1]
         os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
         #image_transform(label.byte()).save(filenameSave)
-
+        print(label_color.shape)
         # label_save = ToPILImage()(label_color)
         label_save = label_color.numpy()
         label_save = label_save.transpose(1, 2, 0)
+        print(label_save.shape)
         # label_save.save(filenameSave)
         images = images.cpu().numpy().squeeze(axis=0)
         images = images.transpose(1,2,0)
@@ -131,7 +132,7 @@ def main(args):
     
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"  ## todo
     parser = ArgumentParser()
 
     parser.add_argument('--state')
