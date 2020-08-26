@@ -347,7 +347,7 @@ def save_video(model_geoMat, model_freiburgForest, cfg):
     image_folder = "/mrtstorage/users/pan/freiburg_forest_multispectral_annotated/raw_data/freiburg_forest_raw/2016-02-26-15-05-05/"
     video_save_path = "/home/pan/repository/erfnet_pytorch/eval/"
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(video_save_path+'output.avi', fourcc, 30.0, (1024, 512))
+    out = cv2.VideoWriter(video_save_path+'output_combine.avi', fourcc, 30.0, (1024, 512))
 
     cuda = cfg['cuda']
     model_geoMat.eval()
@@ -365,8 +365,10 @@ def save_video(model_geoMat, model_freiburgForest, cfg):
             paths.append(image_path)
     paths.sort(key = lambda x: int(x[111:-4]))
 
-    for path in paths:
+    for i, path in enumerate(paths):
         # print(path)
+        if i < 7500:
+            continue
         start_time = time.time()
 
         image = cv2.imread(path).astype(np.float32)
@@ -411,6 +413,7 @@ def save_video(model_geoMat, model_freiburgForest, cfg):
         # print(image.shape)
         # print(outputs_combine.shape)
         output = cv2.addWeighted(image, 0.4, outputs_combine, 0.6, 0)
+        # output = np.hstack([image, outputs_combine])
         print("time: %.2f s" % (time.time() - start_time))
         out.write(output)
     out.release()
@@ -509,5 +512,5 @@ def main():
 
 
 if __name__ == '__main__':
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## TODO
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## TODO
     main()

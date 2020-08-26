@@ -15,11 +15,11 @@
     "epochs_save": 0,
     "datadir_geoMat": "/mrtstorage/users/pan/material_dataset_v2/",
     "datadir_freiburgForest": "/mrtstorage/users/pan/freiburg_forest_multispectral_annotated/freiburg_forest_annotated/",
-    "savedir": "combine_1",
+    "savedir": "combine_3",
     "model_geoMat": "",
-    "weight_geoMat": "/home/pan/repository/erfnet_pytorch/save/geoMat_regression_6/weight_final.pth",
+    "weight_geoMat": "/home/pan/repository/erfnet_pytorch/save/multitask_learning_2/weight_final.pth",
     "model_freiburgForest": "",
-    "weight_freigburgForest": "/home/pan/repository/erfnet_pytorch/save/feriburgForest_5/model_best.pth",
+    "weight_freigburgForest": "/home/pan/repository/erfnet_pytorch/save/feriburgForest_1/model_best.pth",
 
     "iouTrain": true,
     "iouVal": true
