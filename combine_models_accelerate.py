@@ -17,14 +17,16 @@ from train.erfnet import ERFNet, ERFNet_regression,ERFNet_regression_simplified
 from train.iouEval import iouEval, getColorEntry
 from train.multi_models import Multi_models
 from shutil import copyfile
+from path_planning import path_planning
 
 num_class = 2
 
 def colormap_cityscapes(n):
+    # 默认为RGB形式
     cmap = np.zeros([n+1, 3]).astype(np.uint8)
     for i in range(n):
-        cmap[i, :] = np.array([0, i, 255-i])
-    cmap[n,:] = np.array([255, 0, 0])
+        cmap[i, :] = np.array([255-i, i, 0])
+    cmap[n,:] = np.array([0, 0, 255])
     return cmap
 
 class Colorize:
@@ -344,10 +346,10 @@ def test(model_geoMat, model_freiburgForest, dataloader_test, cfg):
         cv2.imwrite(fileSave,outputs_combine)
 
 def save_video(model_geoMat, model_freiburgForest, cfg):
-    image_folder = "/mrtstorage/users/pan/freiburg_forest_multispectral_annotated/raw_data/freiburg_forest_raw/2016-02-26-15-05-05/"
-    video_save_path = "/home/pan/repository/erfnet_pytorch/eval/"
+    image_folder = "/media/pandongwei/Extreme SSD/work_relative/freiburg_forest_annotated/row_image/"
+    video_save_path = "/home/pandongwei/work_repository/erfnet_pytorch/eval/"
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(video_save_path+'output_combine.avi', fourcc, 30.0, (1024, 512))
+    out = cv2.VideoWriter(video_save_path+'output.avi', fourcc, 30.0, (1024, 512))
 
     cuda = cfg['cuda']
     model_geoMat.eval()
@@ -367,8 +369,8 @@ def save_video(model_geoMat, model_freiburgForest, cfg):
 
     for i, path in enumerate(paths):
         # print(path)
-        if i < 7500:
-            continue
+        # if i < 7500:
+        #     continue
         start_time = time.time()
 
         image = cv2.imread(path).astype(np.float32)
@@ -415,6 +417,122 @@ def save_video(model_geoMat, model_freiburgForest, cfg):
         output = cv2.addWeighted(image, 0.4, outputs_combine, 0.6, 0)
         # output = np.hstack([image, outputs_combine])
         print("time: %.2f s" % (time.time() - start_time))
+        out.write(output)
+    out.release()
+
+def test_img(model_geoMat, model_freiburgForest, cfg):
+    img_path = "/home/pandongwei/work_repository/erfnet_pytorch/test_img/row.png"
+
+    cuda = cfg['cuda']
+    model_geoMat.eval()
+    model_freiburgForest.eval()
+
+    coef = np.ones([512, 1024, 5]).astype(np.float32)
+    traversability = (0, 1.0, 0.6, 0.8, -1)
+    for i in range(5):
+        coef[:, :, i] = coef[:, :, i] * traversability[i]
+
+    image = cv2.imread(img_path).astype(np.float32)
+    image = cv2.resize(image,(1024,512),interpolation=cv2.INTER_LINEAR)
+    image = image/255.
+    image = ToTensor()(image).unsqueeze(0)
+    if (cuda):
+        image = image.cuda()
+
+    input = Variable(image)
+
+    # start_time = time.time()
+    with torch.no_grad():
+        outputs_1 = model_freiburgForest(input)
+        outputs_2 = model_geoMat(input)
+        outputs_2 = outputs_2[0]  # TODO
+
+    #print("model inference time: %.2f s" % (time.time() - start_time))
+    # start_time = time.time()
+    outputs_1 = outputs_1[0].max(0)[1].byte().cpu().data.unsqueeze(0)
+    # print(outputs_1.shape)
+    outputs_1 = outputs_1.numpy().transpose(1, 2, 0).astype(np.int64)
+    # print(outputs_1.shape)
+
+    outputs_1 = np.take(coef, outputs_1)
+
+    outputs_2 = outputs_2[0, 0, :, :].cpu().data.unsqueeze(0)
+    # print(outputs_2.shape)
+    outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
+
+    outputs_combine = (outputs_1 * outputs_2 * 255).astype(np.int16)
+    cv2.imwrite('test.png', outputs_combine)
+
+def save_video_path(model_geoMat, model_freiburgForest, cfg):
+    image_folder = '/media/pandongwei/Extreme SSD/work_relative/freiburg_forest_annotated/row_image/'
+    video_save_path = "/home/pandongwei/work_repository/erfnet_pytorch/eval/"
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(video_save_path+'output.avi', fourcc, 30.0, (2048, 512))
+
+    cuda = cfg['cuda']
+    model_geoMat.eval()
+    model_freiburgForest.eval()
+
+    coef = np.ones([512, 1024, 5]).astype(np.float32)
+    traversability = (0, 1.0, 0.6, 0.8, -1)
+    for i in range(5):
+        coef[:, :, i] = coef[:, :, i] * traversability[i]
+
+    paths = []
+    for root, dirs, files in os.walk(image_folder, topdown=True):
+        for file in files:
+            image_path = os.path.join(image_folder, file)
+            paths.append(image_path)
+    paths.sort()
+
+    for i, path in enumerate(paths):
+        # if i > 100:
+        #     continue
+        start_time = time.time()
+        image = cv2.imread(path).astype(np.float32)
+        image = cv2.resize(image,(1024,512),interpolation=cv2.INTER_LINEAR)
+        image = image/255.
+        image = ToTensor()(image).unsqueeze(0)
+        if (cuda):
+            image = image.cuda()
+
+        input = Variable(image)
+
+        # start_time = time.time()
+        with torch.no_grad():
+            outputs_1 = model_freiburgForest(input)
+            outputs_2 = model_geoMat(input)
+            outputs_2 = outputs_2[0]  # TODO
+
+        #print("model inference time: %.2f s" % (time.time() - start_time))
+        # start_time = time.time()
+        outputs_1 = outputs_1[0].max(0)[1].byte().cpu().data.unsqueeze(0)
+        # print(outputs_1.shape)
+        outputs_1 = outputs_1.numpy().transpose(1, 2, 0).astype(np.int64)
+        # print(outputs_1.shape)
+
+        outputs_1 = np.take(coef, outputs_1)
+
+        outputs_2 = outputs_2[0, 0, :, :].cpu().data.unsqueeze(0)
+        # print(outputs_2.shape)
+        outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
+
+        outputs_combine = (outputs_1 * outputs_2 * 255).astype(np.int16)
+        outputs_combine_color = Colorize()(outputs_combine).transpose(1, 2, 0).astype(np.uint8)
+        outputs_combine_color = cv2.cvtColor(outputs_combine_color, cv2.COLOR_RGB2BGR)
+
+        image = image.cpu().numpy()
+        image = (image[0].transpose(1, 2, 0) * 255).astype(np.uint8)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        # print(outputs_combine.shape)
+        # output = np.hstack([outputs_combine_color, image])
+        #print(output.shape)
+        # path planning
+
+        outputs_combine = outputs_combine[:,:,0]
+        output = path_planning(outputs_combine, outputs_combine_color)
+        output = np.hstack([output, image])
+        print(i, "  time: %.2f s" % (time.time() - start_time))
         out.write(output)
     out.release()
 
@@ -507,7 +625,9 @@ def main():
 
     loader_test = DataLoader(dataset_val, num_workers=num_workers, batch_size=1, shuffle=False)
     # test(model_geoMat, model_freiburgForest, loader_test, cfg)
-    save_video(model_geoMat, model_freiburgForest, cfg)
+    # save_video(model_geoMat, model_freiburgForest, cfg)
+    #test_img(model_geoMat, model_freiburgForest, cfg)
+    save_video_path(model_geoMat, model_freiburgForest, cfg)
 
 
 
