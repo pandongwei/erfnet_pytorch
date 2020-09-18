@@ -13,13 +13,13 @@
     "num_workers": 4,
     "steps_loss": 50,
     "epochs_save": 0,
-    "datadir_geoMat": "/mrtstorage/users/pan/material_dataset_v2/",
-    "datadir_freiburgForest": "/mrtstorage/users/pan/freiburg_forest_multispectral_annotated/freiburg_forest_annotated/",
+    "datadir_geoMat": "/media/pandongwei/Extreme SSD/work_relative/material_dataset_v2/",
+    "datadir_freiburgForest": "/media/pandongwei/Extreme SSD/work_relative/freiburg_forest_annotated/",
     "savedir": "combine_3",
     "model_geoMat": "",
-    "weight_geoMat": "/home/pan/repository/erfnet_pytorch/save/multitask_learning_2/weight_final.pth",
+    "weight_geoMat": "/home/pandongwei/work_repository/erfnet_pytorch/save/multitask_learning_2/weight_final.pth",
     "model_freiburgForest": "",
-    "weight_freigburgForest": "/home/pan/repository/erfnet_pytorch/save/feriburgForest_1/model_best.pth",
+    "weight_freigburgForest": "/home/pandongwei/work_repository/erfnet_pytorch/save/feriburgForest_1/model_best.pth",
 
     "iouTrain": true,
     "iouVal": true

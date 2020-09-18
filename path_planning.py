@@ -194,7 +194,34 @@ class Dijkstra:
         # print(l_step*(cul_x-1),l_step*(cul_y+1),self.map[l_step*(cul_x-1),l_step*(cul_y+1)])
         return motion
 
+# 建立一个欧氏距离的mask
+mask = np.array([[10.63, 9.90, 9.21, 8.60, 8.06, 7.62, 7.28, 7.07, 7, 7.07, 7.28, 7.62, 8.06, 8.60, 9.21, 9.90, 10.63],
+                 [10.00, 9.21, 8.49, 7.81, 7.21, 6.71, 6.32, 6.08, 6, 6.08, 6.32, 6.71, 7.21, 7.81, 8.49, 9.21, 10.00],
+                 [9.43, 8.60, 7.81, 7.07, 6.40, 5.83, 5.39, 5.10, 5, 5.10, 5.39, 5.83, 6.40, 7.07, 7.81, 8.60, 9.43],
+                 [8.94, 8.06, 7.21, 6.40, 5.66, 5.00, 4.47, 4.12, 4, 4.12, 4.47, 5.00, 5.66, 6.40, 7.21, 8.06, 8.94],
+                 [8.54, 7.62, 6.71, 5.83, 5.00, 4.24, 3.61, 3.16, 3, 3.16, 3.61, 4.24, 5.00, 5.83, 6.71, 7.62, 8.54],
+                 [8.25, 7.28, 6.32, 5.39, 4.47, 3.61, 2.83, 2.24, 2, 2.24, 2.83, 3.61, 4.47, 5.39, 6.32, 7.28, 8.25],
+                 [8.06, 7.07, 6.08, 5.10, 4.12, 3.16, 2.24, 1.41, 1, 1.41, 2.24, 3.16, 4.12, 5.10, 6.08, 7.07, 8.06],
+                 [8.00, 7.00, 6.00, 5.00, 4.00, 3.00, 2.00, 1.00, 0, 1.00, 2.00, 3.00, 4.00, 5.00, 6.00, 7.00, 8.00],
+                 [8.06, 7.07, 6.08, 5.10, 4.12, 3.16, 2.24, 1.41, 1, 1.41, 2.24, 3.16, 4.12, 5.10, 6.08, 7.07, 8.06],
+                 [8.25, 7.28, 6.32, 5.39, 4.47, 3.61, 2.83, 2.24, 2, 2.24, 2.83, 3.61, 4.47, 5.39, 6.32, 7.28, 8.25],
+                 [8.54, 7.62, 6.71, 5.83, 5.00, 4.24, 3.61, 3.16, 3, 3.16, 3.61, 4.24, 5.00, 5.83, 6.71, 7.62, 8.54],
+                 [8.94, 8.06, 7.21, 6.40, 5.66, 5.00, 4.47, 4.12, 4, 4.12, 4.47, 5.00, 5.66, 6.40, 7.21, 8.06, 8.94],
+                 [9.43, 8.60, 7.81, 7.07, 6.40, 5.83, 5.39, 5.10, 5, 5.10, 5.39, 5.83, 6.40, 7.07, 7.81, 8.60, 9.43],
+                 [10.00, 9.21, 8.49, 7.81, 7.21, 6.71, 6.32, 6.08, 6, 6.08, 6.32, 6.71, 7.21, 7.81, 8.49, 9.21, 10.00],
+                 [10.63, 9.90, 9.21, 8.60, 8.06, 7.62, 7.28, 7.07, 7, 7.07, 7.28, 7.62, 8.06, 8.60, 9.21, 9.90, 10.63]],dtype=np.float16)
+
+def foothold_score(rectangle):
+    alpha = 0.05
+    shape = rectangle.shape
+
+    mid = [shape[0]//2,shape[1]//2]
+    score_dis = mask[8-mid[0]:8-mid[0]+shape[0],9-mid[1]:9-mid[1]+shape[1]]
+    score = rectangle + alpha * (10 - score_dis)
+    return score
+
 def max_index(rectangle):
+    rectangle = foothold_score(rectangle)
     row = np.argmax(rectangle) // rectangle.shape[1]
     col = np.argmax(rectangle) % rectangle.shape[1]
     return [row, col]
@@ -260,17 +287,14 @@ def foothold_selection( img, path, grid_size):
         # rect_rf = imgRotation[pt2[0]-2*rect_h:pt2[0] - rect_h, pt2[1]:pt2[1] + rect_w, 0]
         # rect_lb = imgRotation[pt2[0]-rect_h:pt2[0], pt2[1]-rect_w:pt2[1], 0]
         # rect_rb = imgRotation[pt2[0]-rect_h:pt2[0], pt2[1]:pt2[1] + rect_w, 0]
-        # 找出最大的哪个值对应的位置 TODO 这里需要考虑更多的因素
+        # 找出最大的哪个值对应的位置 TODO： 这里需要考虑更多的因素:通行性+距离
 
         foot_lf, foot_rf, foot_lb, foot_rb = max_index(rect_lf),max_index(rect_rf),max_index(rect_lb),max_index(rect_rb)
-        foot_lf = [foot_lf[0]+pt1_alt[0], foot_lf[1]+pt1_alt[1]]
-        foot_rf = [foot_rf[0]+pt3_alt[0], foot_rf[1]+pt3_alt[1]]
-        foot_lb = [foot_lb[0] + pt1_alt[0]+rect_h, foot_lb[1] + pt1_alt[1]]
-        foot_rb = [foot_rb[0] + pt3_alt[0]+rect_h, foot_rb[1] + pt3_alt[1]]
-        cv2.circle(img, (int(foot_lf[1]),int(foot_lf[0])), 3, (0, 255, 255),-3)
-        cv2.circle(img, (int(foot_rf[1]),int(foot_rf[0])), 3, (255, 255, 0),-3)
-        cv2.circle(img, (int(foot_lb[1]), int(foot_lb[0])), 3, (0, 255, 255),-3)
-        cv2.circle(img, (int(foot_rb[1]), int(foot_rb[0])), 3, (255, 255, 0),-3)
+        foot_lf = [foot_lf[0]+pt1[0], foot_lf[1]+pt1[1]]
+        foot_rf = [foot_rf[0]+pt3[0], foot_rf[1]+pt3[1]]
+        foot_lb = [foot_lb[0] + pt1[0]+rect_h, foot_lb[1] + pt1[1]]
+        foot_rb = [foot_rb[0] + pt3[0]+rect_h, foot_rb[1] + pt3[1]]
+
 
         # 旋转回去
         if angle!=0:
@@ -279,9 +303,14 @@ def foothold_selection( img, path, grid_size):
             [[foot_rf[1]], [foot_rf[0]]] = np.dot(rotateMat, np.array([[foot_rf[1]], [foot_rf[0]], [1]]))
             [[foot_lb[1]], [foot_lb[0]]] = np.dot(rotateMat, np.array([[foot_lb[1]], [foot_lb[0]], [1]]))
             [[foot_rb[1]], [foot_rb[0]]] = np.dot(rotateMat, np.array([[foot_rb[1]], [foot_rb[0]], [1]]))
+        cv2.circle(img, (int(foot_lf[1]), int(foot_lf[0])), 3, (0, 255, 255), -3)
+        cv2.circle(img, (int(foot_rf[1]), int(foot_rf[0])), 3, (255, 255, 0), -3)
+        cv2.circle(img, (int(foot_lb[1]), int(foot_lb[0])), 3, (0, 255, 255), -3)
+        cv2.circle(img, (int(foot_rb[1]), int(foot_rb[0])), 3, (255, 255, 0), -3)
+        imgRotation = cv2.warpAffine(imgRotation, rotateMat, (width, height), borderValue=(255, 255, 255))
 
-        # cv2.rectangle(imgRotation, ((pt1[1]),(pt1[0])),((pt1[1]+rect_w),(pt1[0]+rect_h)),(255,0,0),1)
-        # cv2.rectangle(imgRotation, ((pt3[1]),(pt3[0])),((pt3[1] + rect_w),(pt3[0] + rect_h)),(255,0,0),1)
+        # cv2.rectangle(imgRotation, ((pt1[1]),(pt1[0])),((pt1[1]+rect_w),(pt1[0]+rect_h)),(255,255,255),1)
+        # cv2.rectangle(imgRotation, ((pt3[1]),(pt3[0])),((pt3[1] + rect_w),(pt3[0] + rect_h)),(255,255,255),1)
         # cv2.rectangle(imgRotation, ((pt1[1]), (pt1[0]+rect_h)), ((pt1[1]+rect_w), (pt1[0]+2*rect_h)),
         #               (255, 0, 0), 1)
         # cv2.rectangle(imgRotation, ((pt3[1]), (pt3[0]+rect_h)), ((pt3[1] + rect_w), (pt3[0] + 2*rect_h)),
@@ -321,11 +350,11 @@ def path_planning(map, img):
         plt.show()
 
     #img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    img = foothold_selection(img, [rx, ry], grid_size)
     cv2.circle(img,(sy,sx),7,(0,0,0),-7)
     cv2.circle(img,(gy,gx),7,(0,0,0),-7)
     for i in range(len(rx)-1):
-        cv2.line(img, (ry[i],rx[i]),(ry[i+1],rx[i+1]),(80,80,255),3)
-    img = foothold_selection(img, [rx, ry], grid_size)
+        cv2.line(img, (ry[i],rx[i]),(ry[i+1],rx[i+1]),(80,80,255),1)
     return img
 
 
@@ -362,12 +391,12 @@ def main():
         plt.plot(rx, ry, "-r")
         plt.show()
 
+    img = foothold_selection(img, [rx, ry], grid_size)
+
     cv2.circle(img,(sy,sx),5,(0,0,255))
     cv2.circle(img,(gy,gx),5,(0,0,255))
     for i in range(len(rx)-1):
         cv2.line(img, (ry[i],rx[i]),(ry[i+1],rx[i+1]),(80,80,255),1)
-
-    img = foothold_selection(img, [rx, ry], grid_size)
     cv2.imwrite('test_img/result.png', img)
     # cv2.imshow('test',img)
     # cv2.waitKey()

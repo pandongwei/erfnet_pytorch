@@ -517,6 +517,14 @@ def save_video_path(model_geoMat, model_freiburgForest, cfg):
         # print(outputs_2.shape)
         outputs_2 = outputs_2.numpy().transpose(1, 2, 0)
 
+        # 加上momenton来稳定算法 TODO
+        if i==0:
+            momenton = 0.9
+            output_pre = outputs_2.copy()
+        else:
+            outputs_2 = (momenton*output_pre + (1-momenton)*outputs_2)
+            output_pre = outputs_2.copy()
+
         outputs_combine = (outputs_1 * outputs_2 * 255).astype(np.int16)
         outputs_combine_color = Colorize()(outputs_combine).transpose(1, 2, 0).astype(np.uint8)
         outputs_combine_color = cv2.cvtColor(outputs_combine_color, cv2.COLOR_RGB2BGR)
@@ -528,6 +536,14 @@ def save_video_path(model_geoMat, model_freiburgForest, cfg):
         # output = np.hstack([outputs_combine_color, image])
         #print(output.shape)
         # path planning
+
+        # # 加上momenton来稳定算法 TODO
+        # if i==0:
+        #     momenton = 0.8
+        #     output_pre = outputs_combine_color.copy()
+        # else:
+        #     outputs_combine_color = (momenton*output_pre + (1-momenton)*outputs_combine_color).astype(np.uint8)
+        #     output_pre = outputs_combine_color.copy()
 
         outputs_combine = outputs_combine[:,:,0]
         output = path_planning(outputs_combine, outputs_combine_color)
