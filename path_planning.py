@@ -303,10 +303,10 @@ def foothold_selection( img, path, grid_size):
             [[foot_rf[1]], [foot_rf[0]]] = np.dot(rotateMat, np.array([[foot_rf[1]], [foot_rf[0]], [1]]))
             [[foot_lb[1]], [foot_lb[0]]] = np.dot(rotateMat, np.array([[foot_lb[1]], [foot_lb[0]], [1]]))
             [[foot_rb[1]], [foot_rb[0]]] = np.dot(rotateMat, np.array([[foot_rb[1]], [foot_rb[0]], [1]]))
-        cv2.circle(img, (int(foot_lf[1]), int(foot_lf[0])), 3, (0, 255, 255), -3)
-        cv2.circle(img, (int(foot_rf[1]), int(foot_rf[0])), 3, (255, 255, 0), -3)
-        cv2.circle(img, (int(foot_lb[1]), int(foot_lb[0])), 3, (0, 255, 255), -3)
-        cv2.circle(img, (int(foot_rb[1]), int(foot_rb[0])), 3, (255, 255, 0), -3)
+        cv2.circle(img, (int(foot_lf[1]), int(foot_lf[0])), 2, (0, 255, 255), -2)
+        cv2.circle(img, (int(foot_rf[1]), int(foot_rf[0])), 2, (255, 255, 0), -2)
+        cv2.circle(img, (int(foot_lb[1]), int(foot_lb[0])), 2, (0, 255, 255), -2)
+        cv2.circle(img, (int(foot_rb[1]), int(foot_rb[0])), 2, (255, 255, 0), -2)
         imgRotation = cv2.warpAffine(imgRotation, rotateMat, (width, height), borderValue=(255, 255, 255))
 
         # cv2.rectangle(imgRotation, ((pt1[1]),(pt1[0])),((pt1[1]+rect_w),(pt1[0]+rect_h)),(255,255,255),1)
@@ -396,7 +396,7 @@ def main():
     cv2.circle(img,(sy,sx),5,(0,0,255))
     cv2.circle(img,(gy,gx),5,(0,0,255))
     for i in range(len(rx)-1):
-        cv2.line(img, (ry[i],rx[i]),(ry[i+1],rx[i+1]),(80,80,255),1)
+        cv2.line(img, (ry[i],rx[i]),(ry[i+1],rx[i+1]),(0,0,0),1)
     cv2.imwrite('test_img/result.png', img)
     # cv2.imshow('test',img)
     # cv2.waitKey()
