@@ -20,7 +20,7 @@
     "weight_geoMat": "/home/pandongwei/work_repository/erfnet_pytorch/save/multitask_learning_2/weight_final.pth",
     "model_freiburgForest": "",
     "weight_freigburgForest": "/home/pandongwei/work_repository/erfnet_pytorch/save/feriburgForest_1/model_best.pth",
-
+    "image_folder_raw": "/media/pandongwei/Extreme SSD/work_relative/freiburg_forest_annotated/row_image/",
     "iouTrain": true,
     "iouVal": true
 }
