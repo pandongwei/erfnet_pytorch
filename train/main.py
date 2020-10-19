@@ -68,7 +68,7 @@ class MyCoTransform(object):
             target = Resize(int(self.height/8), Image.NEAREST)(target)
         target = ToLabel()(target)
         #target = Relabel(255, 19)(target) #TODO
-        target = Relabel(255, 5)(target)
+        target = Relabel(255, 3)(target)
 
         return input, target
 
@@ -494,7 +494,7 @@ def main(args):
     print("========== TRAINING FINISHED ===========")
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -505,7 +505,7 @@ if __name__ == '__main__':
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=4)
+    parser.add_argument('--batch-size', type=int, default=2)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
