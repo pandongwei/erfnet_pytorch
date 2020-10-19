@@ -22,6 +22,7 @@ from torchvision.transforms import ToTensor, ToPILImage
 from dataset import VOC12,cityscapes
 from transform import Relabel, ToLabel, Colorize
 from visualize import Dashboard
+from erfnet import ERFNet
 
 import importlib
 from iouEval import iouEval, getColorEntry
@@ -29,7 +30,7 @@ from iouEval import iouEval, getColorEntry
 from shutil import copyfile
 
 NUM_CHANNELS = 3
-NUM_CLASSES = 6 #pascal=22, cityscapes=20
+NUM_CLASSES = 4 #pascal=22, cityscapes=20
 
 color_transform = Colorize(NUM_CLASSES)
 image_transform = ToPILImage()
@@ -137,11 +138,9 @@ def train(args, model, enc=False):
     '''
     weight = torch.ones(NUM_CLASSES)
     weight[0] = 9.799923181533899
-    weight[1] = 80.8582022190093
-    weight[2] = 4.6323022842407
-    weight[3] = 9.5608062744141
-    weight[4] = 7.8698215484619
-    weight[5] = 0
+    weight[1] = 47.2
+    weight[2] = 7.8698215484619
+    weight[3] = 0
 
     assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
 
@@ -414,8 +413,7 @@ def main(args):
 
     #Load Model
     assert os.path.exists(args.model + ".py"), "Error: model definition not found"
-    model_file = importlib.import_module(args.model)
-    model = model_file.Net(NUM_CLASSES)
+    model = ERFNet(NUM_CLASSES)
     copyfile(args.model + ".py", savedir + '/' + args.model + ".py")
     
     if args.cuda:
@@ -488,7 +486,7 @@ def main(args):
                 pretrainedEnc = pretrainedEnc.cpu()     #because loaded encoder is probably saved in cuda
         else:
             pretrainedEnc = next(model.children()).encoder
-        model = model_file.Net(NUM_CLASSES, encoder=pretrainedEnc)  #Add decoder to encoder
+        model = ERFNet(NUM_CLASSES, encoder=pretrainedEnc)  #Add decoder to encoder
         if args.cuda:
             model = torch.nn.DataParallel(model).cuda()
         #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
@@ -503,15 +501,15 @@ if __name__ == '__main__':
     parser.add_argument('--state')
 
     parser.add_argument('--port', type=int, default=8097)
-    parser.add_argument('--datadir', default="/mrtstorage/users/pan/leftImg8bit_trainvaltest/")
+    parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=2)
+    parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
-    parser.add_argument('--savedir', default="erfnet_training_feriburgForest_6")
+    parser.add_argument('--savedir', default="cityscape_4class_1")
     parser.add_argument('--decoder', action='store_true',default=True)
     parser.add_argument('--pretrainedEncoder', default="../trained_models/erfnet_encoder_pretrained.pth.tar")
     parser.add_argument('--visualize', action='store_true')

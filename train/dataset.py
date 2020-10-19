@@ -14,8 +14,8 @@ def is_image(filename):
     return any(filename.endswith(ext) for ext in EXTENSIONS)
 
 def is_label(filename): #TODO
-    #return filename.endswith("_labelTrainIds.png")
-    return filename.endswith("_forFreiburgForest.png")
+    return filename.endswith("_labelTrainIds.png")
+    #return filename.endswith("_forFreiburgForest.png")
 
 def image_path(root, basename, extension):
     return os.path.join(root, f'{basename}{extension}')
@@ -80,6 +80,7 @@ class cityscapes(Dataset):
         self.filenamesGt.sort()
 
         self.co_transform = co_transform # ADDED THIS
+        # print(len(self.filenames), ' ', len(self.filenamesGt))
 
 
     def __getitem__(self, index):
