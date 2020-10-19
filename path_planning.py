@@ -221,14 +221,14 @@ def foothold_score(rectangle):
     return score
 
 def max_index(rectangle):
-    rectangle = foothold_score(rectangle)
+    # rectangle = foothold_score(rectangle)
     row = np.argmax(rectangle) // rectangle.shape[1]
     col = np.argmax(rectangle) % rectangle.shape[1]
     return [row, col]
 
 def foothold_selection( img, path, grid_size):
+    # 遍历轨迹规划中的每一段路径，每一段路径截取其左右上下矩形，作为四足机器人四只脚的落脚点选择区域
     for i in range(len(path[0])-1):
-
         s = grid_size
         y1, y2 = path[1][i], path[1][i+1]
         if y1 > y2: angle = -45
@@ -239,8 +239,6 @@ def foothold_selection( img, path, grid_size):
         pt3_alt = [path[0][i+1], path[1][i+1]]
         pt4_alt = [path[0][i]+s*sin(angle),path[1][i]+s*cos(angle)]
 
-        # print(pt1,'  ', pt2)
-        # print(pt3,' ',pt4)
         height = img.shape[0]  # 原始图像高度
         width = img.shape[1]  # 原始图像宽度
         rotateMat = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1)
@@ -263,8 +261,6 @@ def foothold_selection( img, path, grid_size):
         [[pt2[1]], [pt2[0]]] = np.dot(rotateMat, np.array([[pt2_alt[1]], [pt2_alt[0]], [1]]))
         [[pt3[1]], [pt3[0]]] = np.dot(rotateMat, np.array([[pt3_alt[1]], [pt3_alt[0]], [1]]))
         [[pt4[1]], [pt4[0]]] = np.dot(rotateMat, np.array([[pt4_alt[1]], [pt4_alt[0]], [1]]))
-        # print(pt1,'  ', pt2)
-        # print(pt3,'  ',pt4)
         # pt1 = pt1 + [height / 2, width / 2]
         # pt2 = pt2 + [height / 2, width / 2]
         # pt3 = pt3 + [height / 2, width / 2]
@@ -275,6 +271,7 @@ def foothold_selection( img, path, grid_size):
         # rect2 = imgRotation[int(pt3[0]):int(pt4[0]), int(pt3[1]):int(pt4[1])]
         #cv2.rectangle(imgRotation, (int(pt1[1]),int(pt1[0])),(int(pt2[1]),int(pt2[0])),(255,0,0),1)
         #cv2.rectangle(imgRotation, (int(pt3[1]),int(pt3[0])),(int(pt4[1]),int(pt4[0])),(255,0,0),1)
+
         # 计算四个矩形的顶点的坐标，并且截取出矩形
         rect_w, rect_h = s, int(pt2[0]-pt3[0])//2
         pt1[0], pt1[1], pt3[0], pt3[1] = int(pt1[0]), int(pt1[1]), int(pt3[0]), int(pt3[1])
@@ -288,15 +285,14 @@ def foothold_selection( img, path, grid_size):
         # rect_lb = imgRotation[pt2[0]-rect_h:pt2[0], pt2[1]-rect_w:pt2[1], 0]
         # rect_rb = imgRotation[pt2[0]-rect_h:pt2[0], pt2[1]:pt2[1] + rect_w, 0]
         # 找出最大的哪个值对应的位置 TODO： 这里需要考虑更多的因素:通行性+距离
-
+        # 这里选点，是使用map还是img？
         foot_lf, foot_rf, foot_lb, foot_rb = max_index(rect_lf),max_index(rect_rf),max_index(rect_lb),max_index(rect_rb)
         foot_lf = [foot_lf[0]+pt1[0], foot_lf[1]+pt1[1]]
         foot_rf = [foot_rf[0]+pt3[0], foot_rf[1]+pt3[1]]
         foot_lb = [foot_lb[0] + pt1[0]+rect_h, foot_lb[1] + pt1[1]]
         foot_rb = [foot_rb[0] + pt3[0]+rect_h, foot_rb[1] + pt3[1]]
 
-
-        # 旋转回去
+        # 选取点之后旋转回去，得到原图中点的坐标
         if angle!=0:
             rotateMat = cv2.getRotationMatrix2D((width / 2, height / 2), -angle, 1)
             [[foot_lf[1]], [foot_lf[0]]] = np.dot(rotateMat, np.array([[foot_lf[1]], [foot_lf[0]], [1]]))
@@ -315,16 +311,16 @@ def foothold_selection( img, path, grid_size):
         #               (255, 0, 0), 1)
         # cv2.rectangle(imgRotation, ((pt3[1]), (pt3[0]+rect_h)), ((pt3[1] + rect_w), (pt3[0] + 2*rect_h)),
         #               (255, 0, 0), 1)
-    return  img
+    return img
 
 
 def path_planning(map, img):
     # start and goal position
-    sx = 512  # [m]
-    sy = 512  # [m]
-    gx = 256  # [m]
-    gy = 512  # [m]
-    grid_size = 16  # [m]
+    sx = 256  # [m]
+    sy = 256  # [m]
+    gx = 128  # [m]
+    gy = 256  # [m]
+    grid_size = 8  # [m]
     robot_radius = 4 # [m]
 
     size = map.shape
@@ -390,9 +386,9 @@ def main():
     if show_animation:  # pragma: no cover
         plt.plot(rx, ry, "-r")
         plt.show()
-
+    # 落脚点规划
     img = foothold_selection(img, [rx, ry], grid_size)
-
+    #结果可视化
     cv2.circle(img,(sy,sx),5,(0,0,255))
     cv2.circle(img,(gy,gx),5,(0,0,255))
     for i in range(len(rx)-1):
