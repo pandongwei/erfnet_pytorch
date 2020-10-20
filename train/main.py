@@ -479,7 +479,7 @@ def main(args):
         if args.cuda:
             model = torch.nn.DataParallel(model).cuda()
         #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
-    model = train(model, False)   #Train decoder
+    model = train(model, loader_train, loader_val, args, True)   #Train decoder
     print("========== TRAINING FINISHED ===========")
 
     print("========== START TESTING ==============")
