@@ -38,11 +38,13 @@ class MyCoTransform(object):
 
     def __call__(self, input, target):
         # do something to both images
-        input =  cv2.resize(input, self.size, interpolation=cv2.INTER_LINEAR)
+        input = cv2.resize(input, self.size, interpolation=cv2.INTER_LINEAR)
         target = cv2.resize(target,self.size,interpolation=cv2.INTER_NEAREST)
+
         if self.rescale:
-            input = input/255.
+            input = (input/255.).astype(np.float32)
             # target = target/255.
+            target = target.astype(np.float32)
 
         if(self.augment):
             # Random hflip
