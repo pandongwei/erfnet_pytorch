@@ -10,16 +10,14 @@ import numpy as np
 import torch
 import math
 import cv2
-from PIL import Image, ImageOps
 from argparse import ArgumentParser
 
 from torch.optim import SGD, Adam, lr_scheduler
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose, CenterCrop, Normalize, Resize, Pad
 from torchvision.transforms import ToTensor, ToPILImage
 
-from dataset import VOC12,cityscapes
+from dataset import cityscapes, cityscapes_cv
 from transform import Relabel, ToLabel, Colorize
 from visualize import Dashboard
 from erfnet import ERFNet
@@ -427,8 +425,8 @@ def main(args):
 
     co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
     co_transform_val = MyCoTransform(augment=False, rescale=True, width=640, height=480)#1024)
-    dataset_train = cityscapes(args.datadir, co_transform, 'train')
-    dataset_val = cityscapes(args.datadir, co_transform_val, 'val')
+    dataset_train = cityscapes_cv(args.datadir, co_transform, 'train')
+    dataset_val = cityscapes_cv(args.datadir, co_transform_val, 'val')
     loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
     loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
 
@@ -458,28 +456,28 @@ def main(args):
         model = load_my_state_dict(model, torch.load(args.state))
 
     #train(args, model)
-    if (not args.decoder):
-        print("========== ENCODER TRAINING ===========")
-        model = train(model, loader_train, loader_val, args, True) #Train encoder
-    #CAREFUL: for some reason, after training encoder alone, the decoder gets weights=0. 
-    #We must reinit decoder weights or reload network passing only encoder in order to train decoder
-    print("========== DECODER TRAINING ===========")
-    if (not args.state):
-        if args.pretrainedEncoder:
-            print("Loading encoder pretrained in imagenet")
-            from erfnet_imagenet import ERFNet as ERFNet_imagenet
-            pretrainedEnc = torch.nn.DataParallel(ERFNet_imagenet(1000))
-            pretrainedEnc.load_state_dict(torch.load(args.pretrainedEncoder)['state_dict'])
-            pretrainedEnc = next(pretrainedEnc.children()).features.encoder
-            if (not args.cuda):
-                pretrainedEnc = pretrainedEnc.cpu()     #because loaded encoder is probably saved in cuda
-        else:
-            pretrainedEnc = next(model.children()).encoder
-        model = ERFNet(NUM_CLASSES, encoder=pretrainedEnc)  #Add decoder to encoder
-        if args.cuda:
-            model = torch.nn.DataParallel(model).cuda()
+    # if (not args.decoder):
+    #     print("========== ENCODER TRAINING ===========")
+    #     model = train(model, loader_train, loader_val, args, True) #Train encoder
+    # #CAREFUL: for some reason, after training encoder alone, the decoder gets weights=0.
+    # #We must reinit decoder weights or reload network passing only encoder in order to train decoder
+    # print("========== DECODER TRAINING ===========")
+    # if (not args.state):
+    #     if args.pretrainedEncoder:
+    #         print("Loading encoder pretrained in imagenet")
+    #         from erfnet_imagenet import ERFNet as ERFNet_imagenet
+    #         pretrainedEnc = torch.nn.DataParallel(ERFNet_imagenet(1000))
+    #         pretrainedEnc.load_state_dict(torch.load(args.pretrainedEncoder)['state_dict'])
+    #         pretrainedEnc = next(pretrainedEnc.children()).features.encoder
+    #         if (not args.cuda):
+    #             pretrainedEnc = pretrainedEnc.cpu()     #because loaded encoder is probably saved in cuda
+    #     else:
+    #         pretrainedEnc = next(model.children()).encoder
+    #     model = ERFNet(NUM_CLASSES, encoder=pretrainedEnc)  #Add decoder to encoder
+    #     if args.cuda:
+    #         model = torch.nn.DataParallel(model).cuda()
         #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
-    model = train(model, loader_train, loader_val, args, True)   #Train decoder
+    model = train(model, loader_train, loader_val, args, False)   #Train decoder
     print("========== TRAINING FINISHED ===========")
 
     print("========== START TESTING ==============")
@@ -497,12 +495,12 @@ def main(args):
     filenameSave = "../eval/" + args.savedir + "/"
     os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
     co_transform_test = MyCoTransform(augment=False, rescale=True, width=640, height=480)  # 1024)
-    dataset_test = cityscapes(args.datadir, co_transform_test, 'test')
+    dataset_test = cityscapes_cv(args.datadir, co_transform_test, 'test')
     loader_test = DataLoader(dataset_test,num_workers=args.num_workers, batch_size=1, shuffle=False)
     test(filenameSave, model, loader_test, args)
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -510,7 +508,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
-    # parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
+    #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)

@@ -134,8 +134,8 @@ class cityscapes_cv(Dataset):
         with open(image_path_city(self.labels_root, filenameGt), 'rb') as f:
             label = load_image(f).convert('P')
 
-        image = cv2.imread(filename)
-        label = cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)
+        image = np.array(cv2.imread(filename)).astype(np.float32)
+        label = np.array(cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)).astype(np.float32)
 
         if self.co_transform is not None:
             image, label = self.co_transform(image, label)
