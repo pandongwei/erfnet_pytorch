@@ -23,7 +23,7 @@ from iouEval import iouEval, getColorEntry
 
 from shutil import copyfile
 
-NUM_CLASSES = 5 #pascal=22, cityscapes=20
+NUM_CLASSES = 5 # pascal=22, cityscapes=20
 
 color_transform = Colorize(NUM_CLASSES)
 

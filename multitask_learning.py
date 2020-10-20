@@ -184,10 +184,8 @@ def train(savedir, model ,dataloader_train,dataloader_eval,criterion,optimizer, 
     lambda1 = lambda epoch: pow((1-((epoch-1)/args.num_epochs)),0.9)  ## scheduler 2
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)                             ## scheduler 2
 
-
     for epoch in range(start_epoch, args.num_epochs+1):
         print("----- TRAINING - EPOCH", epoch, "-----")
-
 
         epoch_loss = []
         time_train = []

@@ -9,7 +9,7 @@ import time
 import numpy as np
 import torch
 import math
-
+import cv2
 from PIL import Image, ImageOps
 from argparse import ArgumentParser
 
@@ -37,38 +37,37 @@ image_transform = ToPILImage()
 
 #Augmentations - different function implemented to perform random augments on both image and target
 class MyCoTransform(object):
-    def __init__(self, enc, augment=True, height=512):
-        self.enc=enc
+    def __init__(self, augment=True, rescale=True, width=640, height=480):
         self.augment = augment
-        self.height = height
-        pass
+        self.size = (width, height)
+        self.rescale = rescale
+
     def __call__(self, input, target):
         # do something to both images
-        input =  Resize(self.height, Image.BILINEAR)(input)
-        target = Resize(self.height, Image.NEAREST)(target)
+        input =  cv2.resize(input, self.size, interpolation=cv2.INTER_LINEAR)
+        target = cv2.resize(target,self.size,interpolation=cv2.INTER_NEAREST)
+        if self.rescale:
+            input = input/255.
+            target = target/255.
 
         if(self.augment):
             # Random hflip
             hflip = random.random()
             if (hflip < 0.5):
-                input = input.transpose(Image.FLIP_LEFT_RIGHT)
-                target = target.transpose(Image.FLIP_LEFT_RIGHT)
-            
+                input = cv2.flip(input,1)
+                target = cv2.flip(target, 1)
+
             #Random translation 0-2 pixels (fill rest with padding
-            transX = random.randint(-2, 2) 
-            transY = random.randint(-2, 2)
-
-            input = ImageOps.expand(input, border=(transX,transY,0,0), fill=0)
-            target = ImageOps.expand(target, border=(transX,transY,0,0), fill=255) #pad label filling with 255
-            input = input.crop((0, 0, input.size[0]-transX, input.size[1]-transY))
-            target = target.crop((0, 0, target.size[0]-transX, target.size[1]-transY))   
-
+            # transX = random.randint(-2, 2)
+            # transY = random.randint(-2, 2)
+            #
+            # input = ImageOps.expand(input, border=(transX,transY,0,0), fill=0)
+            # target = ImageOps.expand(target, border=(transX,transY,0,0), fill=255) #pad label filling with 255
+            # input = input.crop((0, 0, input.size[0]-transX, input.size[1]-transY))
+            # target = target.crop((0, 0, target.size[0]-transX, target.size[1]-transY))
         input = ToTensor()(input)
-        if (self.enc):
-            target = Resize(int(self.height/8), Image.NEAREST)(target)
         target = ToLabel()(target)
-        #target = Relabel(255, 19)(target) #TODO
-        target = Relabel(255, 5)(target)
+        target = Relabel(255, 3)(target)
 
         return input, target
 
@@ -84,7 +83,7 @@ class CrossEntropyLoss2d(torch.nn.Module):
         return self.loss(torch.nn.functional.log_softmax(outputs, dim=1), targets)
 
 
-def train(args, model, enc=False):
+def train(model, loader_train,loader_val, args, enc=False):
     best_acc = 0
 
     #TODO: calculate weights by processing dataset histogram (now its being set by hand from the torch values)
@@ -93,47 +92,25 @@ def train(args, model, enc=False):
     # 这是给每一个类别，根据其出现的频率给一个对应的权重 TODO
     '''
     weight = torch.ones(NUM_CLASSES)
-    if (enc):
-        weight[0] = 2.3653597831726	
-        weight[1] = 4.4237880706787	
-        weight[2] = 2.9691488742828	
-        weight[3] = 5.3442072868347	
-        weight[4] = 5.2983593940735	
-        weight[5] = 5.2275490760803	
-        weight[6] = 5.4394111633301	
-        weight[7] = 5.3659925460815	
-        weight[8] = 3.4170460700989	
-        weight[9] = 5.2414722442627	
-        weight[10] = 4.7376127243042	
-        weight[11] = 5.2286224365234	
-        weight[12] = 5.455126285553	
-        weight[13] = 4.3019247055054	
-        weight[14] = 5.4264230728149	
-        weight[15] = 5.4331531524658	
-        weight[16] = 5.433765411377	
-        weight[17] = 5.4631009101868	
-        weight[18] = 5.3947434425354
-    else:
-        weight[0] = 2.8149201869965	
-        weight[1] = 6.9850029945374	
-        weight[2] = 3.7890393733978	
-        weight[3] = 9.9428062438965	
-        weight[4] = 9.7702074050903	
-        weight[5] = 9.5110931396484	
-        weight[6] = 10.311357498169	
-        weight[7] = 10.026463508606	
-        weight[8] = 4.6323022842407	
-        weight[9] = 9.5608062744141	
-        weight[10] = 7.8698215484619	
-        weight[11] = 9.5168733596802	
-        weight[12] = 10.373730659485	
-        weight[13] = 6.6616044044495	
-        weight[14] = 10.260489463806	
-        weight[15] = 10.287888526917	
-        weight[16] = 10.289801597595	
-        weight[17] = 10.405355453491	
-        weight[18] = 10.138095855713	
-
+    weight[0] = 2.8149201869965	
+    weight[1] = 6.9850029945374	
+    weight[2] = 3.7890393733978	
+    weight[3] = 9.9428062438965	
+    weight[4] = 9.7702074050903	
+    weight[5] = 9.5110931396484	
+    weight[6] = 10.311357498169	
+    weight[7] = 10.026463508606	
+    weight[8] = 4.6323022842407	
+    weight[9] = 9.5608062744141	
+    weight[10] = 7.8698215484619	
+    weight[11] = 9.5168733596802	
+    weight[12] = 10.373730659485	
+    weight[13] = 6.6616044044495	
+    weight[14] = 10.260489463806	
+    weight[15] = 10.287888526917	
+    weight[16] = 10.289801597595	
+    weight[17] = 10.405355453491	
+    weight[18] = 10.138095855713	
     weight[19] = 0
     '''
     weight = torch.ones(NUM_CLASSES)
@@ -142,16 +119,6 @@ def train(args, model, enc=False):
     weight[2] = 7.8698215484619
     weight[3] = 0
 
-    assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
-
-    co_transform = MyCoTransform(enc, augment=True, height=args.height)#1024)
-    co_transform_val = MyCoTransform(enc, augment=False, height=args.height)#1024)
-    dataset_train = cityscapes(args.datadir, co_transform, 'train')
-    dataset_val = cityscapes(args.datadir, co_transform_val, 'val')
-
-    loader = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
-    loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
-
     if args.cuda:
         weight = weight.cuda()
     criterion = CrossEntropyLoss2d(weight)
@@ -159,12 +126,8 @@ def train(args, model, enc=False):
 
     savedir = f'../save/{args.savedir}'
 
-    if (enc):
-        automated_log_path = savedir + "/automated_log_encoder.txt"
-        modeltxtpath = savedir + "/model_encoder.txt"
-    else:
-        automated_log_path = savedir + "/automated_log.txt"
-        modeltxtpath = savedir + "/model.txt"    
+    automated_log_path = savedir + "/automated_log.txt"
+    modeltxtpath = savedir + "/model.txt"
 
     if (not os.path.exists(automated_log_path)):    #dont add first line if it exists 
         with open(automated_log_path, "a") as myfile:
@@ -222,7 +185,7 @@ def train(args, model, enc=False):
             usedLr = float(param_group['lr'])
 
         model.train()
-        for step, (images, labels) in enumerate(loader):
+        for step, (images, labels,_,_) in enumerate(loader_train):
 
             start_time = time.time()
             #print (labels.size())
@@ -296,7 +259,7 @@ def train(args, model, enc=False):
         if (doIouVal):
             iouEvalVal = iouEval(NUM_CLASSES)
 
-        for step, (images, labels) in enumerate(loader_val):
+        for step, (images, labels,_,_) in enumerate(loader_val):
             start_time = time.time()
             if args.cuda:
                 images = images.cuda()
@@ -393,7 +356,48 @@ def train(args, model, enc=False):
         with open(automated_log_path, "a") as myfile:
             myfile.write("\n%d\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.8f" % (epoch, average_epoch_loss_train, average_epoch_loss_val, iouTrain, iouVal, usedLr ))
     
-    return(model)   #return model (convenience for encoder-decoder training)
+    return model   #return model (convenience for encoder-decoder training)
+
+def test(filenameSave, model, dataloader_test, args):
+    for step, (images, labels, filename, filenameGt) in enumerate(dataloader_test):
+        if (args.cuda):
+            images = images.cuda()
+            # labels = labels.cuda()
+
+        inputs = Variable(images)
+        # targets = Variable(labels)
+        with torch.no_grad():
+            outputs = model(inputs)
+
+        label = outputs[0].max(0)[1].byte().cpu().data
+        # label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
+        label_color = Colorize()(label.unsqueeze(0))
+
+
+        # image_transform(label.byte()).save(filenameSave)
+
+        # label_save = ToPILImage()(label_color)
+        label_save = label_color.numpy()
+        label_save = label_save.transpose(1, 2, 0)
+        # label_save.save(filenameSave)
+        images = images.cpu().numpy().squeeze(axis=0).transpose(1, 2, 0)
+        images = (images*255).astype(np.uint8)
+
+        for i in range(len(filename)):
+            fileSave = '../eval/'+ args.savedir + "/" + filename[i].split("leftImg8bit/")[1]
+            os.makedirs(os.path.dirname(fileSave), exist_ok=True)
+            output = cv2.addWeighted(images, 0.4, label_save, 0.6, 0)
+            cv2.imwrite(fileSave,output)
+
+            # print(fileSave)
+            # plt.figure(figsize=(10.4,10.4), dpi=10)
+            # # plt.imshow(images)
+            # plt.imshow(label_save,alpha=0.6,cmap='gray')
+            # plt.axis('off')
+            # # plt.show()
+            # plt.savefig(fileSave,dpi=10)
+            # plt.close()
+
 
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     torch.save(state, filenameCheckpoint)
@@ -418,7 +422,17 @@ def main(args):
     
     if args.cuda:
         model = torch.nn.DataParallel(model).cuda()
-    
+
+    assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
+
+    co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
+    co_transform_val = MyCoTransform(augment=False, rescale=True, width=640, height=480)#1024)
+    dataset_train = cityscapes(args.datadir, co_transform, 'train')
+    dataset_val = cityscapes(args.datadir, co_transform_val, 'val')
+    loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
+    loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
+
+
     if args.state:
         #if args.state is provided then load this state for training
         #Note: this only loads initialized weights. If you want to resume a training use "--resume" option!!
@@ -443,31 +457,6 @@ def main(args):
         #print(torch.load(args.state))
         model = load_my_state_dict(model, torch.load(args.state))
 
-    """
-    def weights_init(m):
-        classname = m.__class__.__name__
-        if classname.find('Conv') != -1:
-            #m.weight.data.normal_(0.0, 0.02)
-            n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            m.weight.data.normal_(0, math.sqrt(2. / n))
-        elif classname.find('BatchNorm') != -1:
-            #m.weight.data.normal_(1.0, 0.02)
-            m.weight.data.fill_(1)
-            m.bias.data.fill_(0)
-
-    #TO ACCESS MODEL IN DataParallel: next(model.children())
-    #next(model.children()).decoder.apply(weights_init)
-    #Reinitialize weights for decoder
-    
-    next(model.children()).decoder.layers.apply(weights_init)
-    next(model.children()).decoder.output_conv.apply(weights_init)
-
-    #print(model.state_dict())
-    f = open('weights5.txt', 'w')
-    f.write(str(model.state_dict()))
-    f.close()
-    """
-
     #train(args, model)
     if (not args.decoder):
         print("========== ENCODER TRAINING ===========")
@@ -490,8 +479,27 @@ def main(args):
         if args.cuda:
             model = torch.nn.DataParallel(model).cuda()
         #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
-    model = train(args, model, False)   #Train decoder
+    # model = train(model, loader_train, loader_val, args, enc=False)   #Train decoder
     print("========== TRAINING FINISHED ===========")
+
+    print("========== START TESTING ==============")
+    model_dir = "/home/pandongwei/work_repository/erfnet_pytorch/save/"+args.savedir+'/model_best.pth'
+    #model_dir = "/home/pan/repository/erfnet_pytorch/save/geoMat_regression_2/checkpoint.pth.tar"
+    def load_my_state_dict(model, state_dict):
+        # state_dict = state_dict["state_dict"]
+        own_state = model.state_dict()
+        for name, param in state_dict.items():
+            if name not in own_state:
+                 continue
+            own_state[name].copy_(param)
+        return model
+    model = load_my_state_dict(model, torch.load(model_dir))
+    filenameSave = "../eval/" + args.savedir + "/"
+    os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
+    co_transform_test = MyCoTransform(augment=False, rescale=True, width=640, height=480)  # 1024)
+    dataset_test = cityscapes(args.datadir, co_transform_test, 'test')
+    loader_test = DataLoader(dataset_test,num_workers=args.num_workers, batch_size=1, shuffle=False)
+    test(filenameSave, model, loader_test, args)
 
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
@@ -501,7 +509,8 @@ if __name__ == '__main__':
     parser.add_argument('--state')
 
     parser.add_argument('--port', type=int, default=8097)
-    parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
+    # parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
+    parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)

@@ -59,7 +59,7 @@ class VOC12(Dataset):
         return len(self.filenames)
 
 
-
+# use pillow
 class cityscapes(Dataset):
 
     def __init__(self, root, co_transform=None, subset='train'):
@@ -86,8 +86,7 @@ class cityscapes(Dataset):
     def __getitem__(self, index):
         filename = self.filenames[index]
         filenameGt = self.filenamesGt[index]
-        # print("111111111111111111111111111 ", filename)
-        # print("f2222222222222222222222222222222222  ",filenameGt)
+
         with open(image_path_city(self.images_root, filename), 'rb') as f:
             image = load_image(f).convert('RGB')
         with open(image_path_city(self.labels_root, filenameGt), 'rb') as f:
@@ -96,10 +95,56 @@ class cityscapes(Dataset):
         if self.co_transform is not None:
             image, label = self.co_transform(image, label)
 
-        return image, label
+        return image, label, filename, filenameGt
 
     def __len__(self):
         return len(self.filenames)
+
+# use opencv
+class cityscapes_cv(Dataset):
+
+    def __init__(self, root, co_transform=None, subset='train'):
+        self.images_root = os.path.join(root, 'leftImg8bit/')
+        self.labels_root = os.path.join(root, 'gtFine/')
+
+        self.images_root += subset
+        self.labels_root += subset
+
+        # print (self.images_root)
+        # self.filenames = [image_basename(f) for f in os.listdir(self.images_root) if is_image(f)]
+        self.filenames = [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(self.images_root)) for f in
+                          fn if is_image(f)]
+        self.filenames.sort()
+
+        # [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(".")) for f in fn]
+        # self.filenamesGt = [image_basename(f) for f in os.listdir(self.labels_root) if is_image(f)]
+        self.filenamesGt = [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(self.labels_root)) for f in
+                            fn if is_label(f)]
+        self.filenamesGt.sort()
+
+        self.co_transform = co_transform  # ADDED THIS
+        # print(len(self.filenames), ' ', len(self.filenamesGt))
+
+    def __getitem__(self, index):
+        filename = self.filenames[index]
+        filenameGt = self.filenamesGt[index]
+
+        with open(image_path_city(self.images_root, filename), 'rb') as f:
+            image = load_image(f).convert('RGB')
+        with open(image_path_city(self.labels_root, filenameGt), 'rb') as f:
+            label = load_image(f).convert('P')
+
+        image = cv2.imread(filename)
+        label = cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)
+
+        if self.co_transform is not None:
+            image, label = self.co_transform(image, label)
+
+        return image, label, filename, filenameGt
+
+    def __len__(self):
+        return len(self.filenames)
+
 
 # use Pillow
 class freiburgForest(Dataset):
