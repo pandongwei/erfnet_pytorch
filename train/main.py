@@ -8,7 +8,6 @@ import random
 import time
 import numpy as np
 import torch
-import math
 import cv2
 from argparse import ArgumentParser
 
@@ -17,14 +16,11 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor, ToPILImage
 
-from dataset import cityscapes, cityscapes_cv
+from dataset import cityscapes_cv
 from transform import Relabel, ToLabel, Colorize
 from visualize import Dashboard
 from erfnet import ERFNet
-
-import importlib
 from iouEval import iouEval, getColorEntry
-
 from shutil import copyfile
 
 NUM_CHANNELS = 3
@@ -119,7 +115,7 @@ def train(model, loader_train,loader_val, args, enc=False):
 
     if args.cuda:
         weight = weight.cuda()
-    criterion = CrossEntropyLoss2d(weight)
+    criterion = torch.nn.CrossEntropyLoss(weight)
     print(type(criterion))
 
     savedir = f'../save/{args.savedir}'
@@ -142,11 +138,8 @@ def train(model, loader_train,loader_val, args, enc=False):
 
     start_epoch = 1
     if args.resume:
-        #Must load weights, optimizer, epoch and best value. 
-        if enc:
-            filenameCheckpoint = savedir + '/checkpoint_enc.pth.tar'
-        else:
-            filenameCheckpoint = savedir + '/checkpoint.pth.tar'
+        #Must load weights, optimizer, epoch and best value.
+        filenameCheckpoint = savedir + '/checkpoint.pth.tar'
 
         assert os.path.exists(filenameCheckpoint), "Error: resume option was used but checkpoint was not found in folder"
         checkpoint = torch.load(filenameCheckpoint)
@@ -197,7 +190,7 @@ def train(model, loader_train,loader_val, args, enc=False):
             #print("labels: ", labels.size())
             inputs = Variable(images)
             targets = Variable(labels)
-            outputs = model(inputs, only_encode=enc)
+            outputs = model(inputs)
 
             #print("output: ", outputs.size()) #TODO
             #print("targets", np.unique(targets[:, 0].cpu().data.numpy()))
@@ -266,7 +259,7 @@ def train(model, loader_train,loader_val, args, enc=False):
             inputs = Variable(images)
             targets = Variable(labels)
             with torch.no_grad():
-                outputs = model(inputs, only_encode=enc)
+                outputs = model(inputs)
 
                 loss = criterion(outputs, targets[:, 0])
             epoch_loss_val.append(loss.data)
@@ -396,7 +389,6 @@ def test(filenameSave, model, dataloader_test, args):
             # plt.savefig(fileSave,dpi=10)
             # plt.close()
 
-
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     torch.save(state, filenameCheckpoint)
     if is_best:
@@ -434,16 +426,6 @@ def main(args):
     if args.state:
         #if args.state is provided then load this state for training
         #Note: this only loads initialized weights. If you want to resume a training use "--resume" option!!
-        """
-        try:
-            model.load_state_dict(torch.load(args.state))
-        except AssertionError:
-            model.load_state_dict(torch.load(args.state,
-                map_location=lambda storage, loc: storage))
-        #When model is saved as DataParallel it adds a model. to each key. To remove:
-        #state_dict = {k.partition('model.')[2]: v for k,v in state_dict}
-        #https://discuss.pytorch.org/t/prefix-parameter-names-in-saved-model-if-trained-by-multi-gpu/494
-        """
         def load_my_state_dict(model, state_dict):  #custom function to load model when not all dict keys are there
             own_state = model.state_dict()
             for name, param in state_dict.items():
@@ -455,29 +437,7 @@ def main(args):
         #print(torch.load(args.state))
         model = load_my_state_dict(model, torch.load(args.state))
 
-    #train(args, model)
-    # if (not args.decoder):
-    #     print("========== ENCODER TRAINING ===========")
-    #     model = train(model, loader_train, loader_val, args, True) #Train encoder
-    # #CAREFUL: for some reason, after training encoder alone, the decoder gets weights=0.
-    # #We must reinit decoder weights or reload network passing only encoder in order to train decoder
-    # print("========== DECODER TRAINING ===========")
-    # if (not args.state):
-    #     if args.pretrainedEncoder:
-    #         print("Loading encoder pretrained in imagenet")
-    #         from erfnet_imagenet import ERFNet as ERFNet_imagenet
-    #         pretrainedEnc = torch.nn.DataParallel(ERFNet_imagenet(1000))
-    #         pretrainedEnc.load_state_dict(torch.load(args.pretrainedEncoder)['state_dict'])
-    #         pretrainedEnc = next(pretrainedEnc.children()).features.encoder
-    #         if (not args.cuda):
-    #             pretrainedEnc = pretrainedEnc.cpu()     #because loaded encoder is probably saved in cuda
-    #     else:
-    #         pretrainedEnc = next(model.children()).encoder
-    #     model = ERFNet(NUM_CLASSES, encoder=pretrainedEnc)  #Add decoder to encoder
-    #     if args.cuda:
-    #         model = torch.nn.DataParallel(model).cuda()
-        #When loading encoder reinitialize weights for decoder because they are set to 0 when training dec
-    model = train(model, loader_train, loader_val, args, False)   #Train decoder
+    model = train(model, loader_train, loader_val, args)   #Train decoder
     print("========== TRAINING FINISHED ===========")
 
     print("========== START TESTING ==============")
@@ -500,7 +460,7 @@ def main(args):
     test(filenameSave, model, loader_test, args)
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
