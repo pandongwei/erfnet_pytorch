@@ -42,7 +42,7 @@ class MyCoTransform(object):
         target = cv2.resize(target,self.size,interpolation=cv2.INTER_NEAREST)
         if self.rescale:
             input = input/255.
-            target = target/255.
+            # target = target/255.
 
         if(self.augment):
             # Random hflip
