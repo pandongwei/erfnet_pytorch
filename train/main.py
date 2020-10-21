@@ -520,15 +520,15 @@ def main(args):
     inference(model,args)
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "4"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
     parser.add_argument('--state')
 
     parser.add_argument('--port', type=int, default=8097)
-    #parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
-    parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
+    parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
+    #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)
