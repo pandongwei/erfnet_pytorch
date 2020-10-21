@@ -16,7 +16,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor, ToPILImage
 
-from dataset import cityscapes_cv
+from dataset import cityscapes_cv,gardenscapes
 from transform import Relabel, ToLabel, Colorize
 from visualize import Dashboard
 from erfnet import ERFNet
@@ -391,6 +391,58 @@ def test(filenameSave, model, dataloader_test, args):
             # plt.savefig(fileSave,dpi=10)
             # plt.close()
 
+def inference(model, args):
+    image_folder = "/media/pandongwei/Extreme SSD/work_relative/extract_img/1/"
+    video_save_path = "/home/pandongwei/work_repository/erfnet_pytorch/eval/"
+
+    # parameters about saving video
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(video_save_path + 'output_new.avi', fourcc, 10.0, (640, 480))
+
+    cuda = True
+    model.eval()
+
+    paths = []
+    for root, dirs, files in os.walk(image_folder, topdown=True):
+        for file in files:
+            image_path = os.path.join(image_folder, file)
+            paths.append(image_path)
+    paths.sort()
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    for i, path in enumerate(paths):
+        start_time = time.time()
+        image = cv2.imread(path)
+        image = (image / 255.).astype(np.float32)
+
+        image = ToTensor()(image).unsqueeze(0)
+        if (cuda):
+            image = image.cuda()
+
+        input = Variable(image)
+
+        with torch.no_grad():
+            output = model(input)
+
+        label = output[0].max(0)[1].byte().cpu().data
+        # label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
+        label_color = Colorize()(label.unsqueeze(0))
+
+
+        label_save = label_color.numpy()
+        label_save = label_save.transpose(1, 2, 0)
+        # label_save.save(filenameSave)
+        image = image.cpu().numpy().squeeze(axis=0).transpose(1, 2, 0)
+        image = (image * 255).astype(np.uint8)
+        output = cv2.addWeighted(image, 0.4, label_save, 0.6, 0)
+        #output = np.hstack([label_save, image])
+        out.write(output)
+
+        print(i, "  time: %.2f s" % (time.time() - start_time))
+    out.release()
+
+
+
 def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     torch.save(state, filenameCheckpoint)
     if is_best:
@@ -417,12 +469,17 @@ def main(args):
 
     assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
 
+    # co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
+    # co_transform_val = MyCoTransform(augment=False, rescale=True, width=640, height=480)#1024)
+    # dataset_train = cityscapes_cv(args.datadir, co_transform, 'train')
+    # dataset_val = cityscapes_cv(args.datadir, co_transform_val, 'val')
+    # loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
+    # loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
+
     co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
-    co_transform_val = MyCoTransform(augment=False, rescale=True, width=640, height=480)#1024)
-    dataset_train = cityscapes_cv(args.datadir, co_transform, 'train')
-    dataset_val = cityscapes_cv(args.datadir, co_transform_val, 'val')
+    dataset_train = gardenscapes(args.datadir, co_transform, 'train')
     loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
-    loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
+    loader_val = loader_train
 
 
     if args.state:
@@ -453,24 +510,25 @@ def main(args):
                  continue
             own_state[name].copy_(param)
         return model
-    model = load_my_state_dict(model, torch.load(model_dir))
-    filenameSave = "../eval/" + args.savedir + "/"
-    os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
-    co_transform_test = MyCoTransform(augment=False, rescale=True, width=640, height=480)  # 1024)
-    dataset_test = cityscapes_cv(args.datadir, co_transform_test, 'test')
-    loader_test = DataLoader(dataset_test,num_workers=args.num_workers, batch_size=1, shuffle=False)
-    test(filenameSave, model, loader_test, args)
+    # model = load_my_state_dict(model, torch.load(model_dir))
+    # filenameSave = "../eval/" + args.savedir + "/"
+    # os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
+    # co_transform_test = MyCoTransform(augment=False, rescale=True, width=640, height=480)  # 1024)
+    # dataset_test = cityscapes_cv(args.datadir, co_transform_test, 'test')
+    # loader_test = DataLoader(dataset_test,num_workers=args.num_workers, batch_size=1, shuffle=False)
+    #test(filenameSave, model, loader_test, args)
+    inference(model,args)
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
     parser.add_argument('--state')
 
     parser.add_argument('--port', type=int, default=8097)
-    parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
-    #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
+    #parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
+    parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)

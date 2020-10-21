@@ -140,6 +140,39 @@ class cityscapes_cv(Dataset):
     def __len__(self):
         return len(self.filenames)
 
+class gardenscapes(Dataset):
+
+    def __init__(self, root, co_transform=None, subset='train'):
+        self.images_root = os.path.join(root, 'leftImg8bit/')
+        self.labels_root = os.path.join(root, 'gtFine/')
+
+        self.images_root += subset
+        self.labels_root += subset
+
+        self.filenames = [os.path.join(self.images_root, f) for f in os.listdir(self.images_root)]
+        self.filenames.sort()
+
+        self.filenamesGt = [os.path.join(self.labels_root, f) for f in os.listdir(self.labels_root)]
+        self.filenamesGt.sort()
+
+        self.co_transform = co_transform  # ADDED THIS
+        # print(len(self.filenames), ' ', len(self.filenamesGt))
+
+    def __getitem__(self, index):
+        filename = self.filenames[index]
+        filenameGt = self.filenamesGt[index]
+
+        image = cv2.imread(filename)
+        label = cv2.imread(filenameGt, cv2.IMREAD_GRAYSCALE)
+
+        if self.co_transform is not None:
+            image, label = self.co_transform(image, label)
+
+        return image, label, filename, filenameGt
+
+    def __len__(self):
+        return len(self.filenames)
+
 
 # use Pillow
 class freiburgForest(Dataset):
