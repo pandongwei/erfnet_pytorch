@@ -477,7 +477,7 @@ def main(args):
     # loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
 
     co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
-    dataset_train = gardenscapes(args.datadir, co_transform, 'train')
+    dataset_train = gardenscapes(args.datadir, co_transform)
     loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
     loader_val = loader_train
 
@@ -527,8 +527,10 @@ if __name__ == '__main__':
     parser.add_argument('--state')
 
     parser.add_argument('--port', type=int, default=8097)
-    parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
+    #parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
     #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
+    parser.add_argument('/home/disk1/pandongwei/extract_img/')
+    #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/extract_img/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)
