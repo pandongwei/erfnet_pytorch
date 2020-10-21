@@ -529,7 +529,7 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=8097)
     #parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
     #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
-    parser.add_argument('/home/disk1/pandongwei/extract_img/')
+    parser.add_argument('--datadir', default='/home/disk1/pandongwei/extract_img/')
     #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/extract_img/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
