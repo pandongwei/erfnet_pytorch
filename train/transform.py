@@ -5,9 +5,12 @@ from PIL import Image
 
 def colormap_cityscapes(n):
     cmap=np.zeros([n, 3]).astype(np.uint8)
-    cmap[0,:] = np.array([128, 64,128])
-    cmap[1,:] = np.array([244, 35,232])
-    cmap[2,:] = np.array([ 70, 70, 70])
+    cmap[0,:] = np.array([255, 0,0])
+    cmap[1,:] = np.array([0, 255,0])
+    cmap[2,:] = np.array([ 0, 0, 255])
+    # cmap[0, :] = np.array([128, 64, 128])
+    # cmap[1, :] = np.array([244, 35, 232])
+    # cmap[2, :] = np.array([70, 70, 70])
     cmap[3,:] = np.array([ 102,102,156])
     cmap[4,:] = np.array([ 190,153,153])
     cmap[5,:] = np.array([ 153,153,153])

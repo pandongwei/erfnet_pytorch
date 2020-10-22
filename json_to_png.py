@@ -8,10 +8,7 @@ import os
 def json_to_png(images_root):
     json_paths = [os.path.join(images_root, f) for f in os.listdir(images_root) if ".json" in f]
     json_paths.sort()
-    i = 0
     for json_path in json_paths:
-        i += 1
-        if i<300: continue
         a = 'labelme_json_to_dataset '+ json_path + ' -o ' + json_path[:-5] + '.png'
         a = a.replace('e ','e\\ ')
         os.system(a)
@@ -20,7 +17,7 @@ def main():
     images_root = '/media/pandongwei/Extreme SSD/work_relative/extract_img/leftImg8bit'
     save_root = '/media/pandongwei/Extreme SSD/work_relative/extract_img/gtFine/'
 
-    #json_to_png(images_root)
+    json_to_png(images_root)
 
     os.makedirs(os.path.dirname(save_root), exist_ok=True)
     paths_label = []
@@ -35,12 +32,12 @@ def main():
     paths_img.sort()
     paths_label.sort()
 
-    # for path in paths_label:
-    #     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-    #     # label颜色更改
-    #     ret1, img = cv2.threshold(img, 37, 255, cv2.THRESH_BINARY_INV) # 38
-    #     save_path = save_root + path.split("extract_img/leftImg8bit/")[1].split("/label")[0]
-    #     cv2.imwrite(save_path, img)
+    for path in paths_label:
+        img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+        # label颜色更改
+        ret1, img = cv2.threshold(img, 37, 255, cv2.THRESH_BINARY_INV) # 38
+        save_path = save_root + path.split("extract_img/leftImg8bit/")[1].split("/label")[0]
+        cv2.imwrite(save_path, img)
     # 将图片转为png格式
     for path in paths_img:
         img = cv2.imread(path)

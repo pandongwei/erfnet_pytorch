@@ -395,12 +395,12 @@ def test(filenameSave, model, dataloader_test, args):
             # plt.close()
 
 def inference(model, args):
-    image_folder = "/media/pandongwei/Extreme SSD/work_relative/extract_img/1/"
+    image_folder = "/media/pandongwei/Extreme SSD/work_relative/extract_img/RGB/"
     video_save_path = "/home/pandongwei/work_repository/erfnet_pytorch/eval/"
 
     # parameters about saving video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(video_save_path + 'output_new.avi', fourcc, 10.0, (1280, 480))
+    out = cv2.VideoWriter(video_save_path + 'output_new.avi', fourcc, 10.0, (640, 480))
 
     cuda = True
     model.eval()
@@ -431,14 +431,13 @@ def inference(model, args):
         # label_cityscapes = cityscapes_trainIds2labelIds(label.unsqueeze(0))
         label_color = Colorize()(label.unsqueeze(0))
 
-
         label_save = label_color.numpy()
         label_save = label_save.transpose(1, 2, 0)
         # label_save.save(filenameSave)
         image = image.cpu().numpy().squeeze(axis=0).transpose(1, 2, 0)
         image = (image * 255).astype(np.uint8)
-        #output = cv2.addWeighted(image, 0.4, label_save, 0.6, 0)
-        output = np.hstack([label_save, image])
+        output = cv2.addWeighted(image, 0.5, label_save, 0.5, 0)
+        #output = np.hstack([label_save, image])
         out.write(output)
 
         print(i, "  time: %.2f s" % (time.time() - start_time))
@@ -472,17 +471,17 @@ def main(args):
 
     assert os.path.exists(args.datadir), "Error: datadir (dataset directory) could not be loaded"
 
-    # co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
-    # co_transform_val = MyCoTransform(augment=False, rescale=True, width=640, height=480)#1024)
-    # dataset_train = cityscapes_cv(args.datadir, co_transform, 'train')
-    # dataset_val = cityscapes_cv(args.datadir, co_transform_val, 'val')
-    # loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
-    # loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
-
     co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
-    dataset_train = gardenscapes(args.datadir, co_transform)
+    co_transform_val = MyCoTransform(augment=False, rescale=True, width=640, height=480)#1024)
+    dataset_train = cityscapes_cv(args.datadir, co_transform, 'train')
+    dataset_val = cityscapes_cv(args.datadir, co_transform_val, 'val')
     loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
-    loader_val = loader_train
+    loader_val = DataLoader(dataset_val, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
+
+    # co_transform = MyCoTransform(augment=True, rescale=True, width=640, height=480)#1024)
+    # dataset_train = gardenscapes(args.datadir, co_transform)
+    # loader_train = DataLoader(dataset_train, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=True)
+    # loader_val = loader_train
 
 
     if args.state:
@@ -531,8 +530,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--port', type=int, default=8097)
     #parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
-    #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
-    parser.add_argument('--datadir', default='/home/disk1/pandongwei/extract_img/')
+    parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
+    #parser.add_argument('--datadir', default='/home/disk1/pandongwei/extract_img/')
     #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/extract_img/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
