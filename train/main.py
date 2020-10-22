@@ -397,7 +397,7 @@ def inference(model, args):
 
     # parameters about saving video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(video_save_path + 'output_new.avi', fourcc, 10.0, (640, 480))
+    out = cv2.VideoWriter(video_save_path + 'output_new.avi', fourcc, 10.0, (1280, 480))
 
     cuda = True
     model.eval()
@@ -434,8 +434,8 @@ def inference(model, args):
         # label_save.save(filenameSave)
         image = image.cpu().numpy().squeeze(axis=0).transpose(1, 2, 0)
         image = (image * 255).astype(np.uint8)
-        output = cv2.addWeighted(image, 0.4, label_save, 0.6, 0)
-        #output = np.hstack([label_save, image])
+        #output = cv2.addWeighted(image, 0.4, label_save, 0.6, 0)
+        output = np.hstack([label_save, image])
         out.write(output)
 
         print(i, "  time: %.2f s" % (time.time() - start_time))
@@ -510,17 +510,17 @@ def main(args):
                  continue
             own_state[name].copy_(param)
         return model
-    # model = load_my_state_dict(model, torch.load(model_dir))
+    model = load_my_state_dict(model, torch.load(model_dir))
     # filenameSave = "../eval/" + args.savedir + "/"
     # os.makedirs(os.path.dirname(filenameSave), exist_ok=True)
     # co_transform_test = MyCoTransform(augment=False, rescale=True, width=640, height=480)  # 1024)
     # dataset_test = cityscapes_cv(args.datadir, co_transform_test, 'test')
     # loader_test = DataLoader(dataset_test,num_workers=args.num_workers, batch_size=1, shuffle=False)
     #test(filenameSave, model, loader_test, args)
-    inference(model,args)
+    #inference(model,args)
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"  ## todo
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  ## todo
     parser = ArgumentParser()
     parser.add_argument('--cuda', action='store_true', default=True)  #NOTE: cpu-only has not been tested so you might have to change code if you deactivate this flag
     parser.add_argument('--model', default="erfnet")
@@ -534,7 +534,7 @@ if __name__ == '__main__':
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=2)
+    parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--steps-loss', type=int, default=50)
     parser.add_argument('--steps-plot', type=int, default=50)
     parser.add_argument('--epochs-save', type=int, default=0)    #You can use this value to save model every X epochs
