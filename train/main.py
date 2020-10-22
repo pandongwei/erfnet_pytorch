@@ -348,7 +348,10 @@ def train(model, loader_train,loader_val, args, enc=False):
         #Epoch		Train-loss		Test-loss	Train-IoU	Test-IoU		learningRate
         with open(automated_log_path, "a") as myfile:
             myfile.write("\n%d\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.8f" % (epoch, average_epoch_loss_train, average_epoch_loss_val, iouTrain, iouVal, usedLr ))
-    
+
+    filenamelast = f'{savedir}/weight_final.pth'
+    torch.save(model.state_dict(), filenamelast)
+
     return model   #return model (convenience for encoder-decoder training)
 
 def test(filenameSave, model, dataloader_test, args):
