@@ -36,7 +36,7 @@ def main():
         img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         # label颜色更改
         ret1, img = cv2.threshold(img, 37, 255, cv2.THRESH_BINARY_INV) # 38
-        save_path = save_root + path.split("extract_img/leftImg8bit/")[1].split("/label")[0]
+        save_path = save_root + path.split("extract_img/leftImg8bit/")[1].split("/label")[0][:-4]+"_labelTrainIds.png"
         cv2.imwrite(save_path, img)
     # 将图片转为png格式
     for path in paths_img:
