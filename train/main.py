@@ -414,6 +414,7 @@ def inference(model, args):
     paths.sort()
     font = cv2.FONT_HERSHEY_SIMPLEX
 
+    angle_pre = 0
     for i, path in enumerate(paths):
         start_time = time.time()
         image = cv2.imread(path)
@@ -435,8 +436,8 @@ def inference(model, args):
         label_save = label_color.numpy()
         label_save = label_save.transpose(1, 2, 0)
         # 加上路径规划
-        label_save = perception_to_angle(label_save)
-
+        label_save, angle = perception_to_angle(label_save, angle_pre)
+        angle_pre = angle
         # label_save.save(filenameSave)
         image = image.cpu().numpy().squeeze(axis=0).transpose(1, 2, 0)
         image = (image * 255).astype(np.uint8)
@@ -474,14 +475,14 @@ def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
         print("Saving model as best")
         torch.save(state, filenameBest)
 
-def perception_to_angle(map, grid_size=10):
+def perception_to_angle(map, angle_pre, grid_size=10):
     tmp = map.copy()
     size = map.shape
     map = cv2.resize(map, (size[1] // grid_size, size[0] // grid_size))
     map = cv2.resize(map, (size[1], size[0]), interpolation=cv2.INTER_NEAREST)
 
     seed = 240
-    angle_pre, angle, momenton = 0, 0, 0.5
+    angle, momenton = 0, 0.5
     path_point = []
     for i in range(470, -10, -10):
         if any(map[i][seed] != (255, 0, 0)): break
@@ -503,12 +504,8 @@ def perception_to_angle(map, grid_size=10):
         start, end = path_point[0], path_point[-1]
         angle = math.atan2(start[0]-end[0],start[1]-end[1])
         angle = momenton * angle_pre + (1-momenton) * angle
-        print(angle*180/math.pi)
         cv2.line(map, path_point[0],(path_point[0][0]-int(math.tan(angle)*100),path_point[0][1]-100),(0,0,0),3)
-    angle_pre = angle
-    cv2.imshow('test', map)
-    cv2.waitKey(10)
-    return map
+    return map, angle
 
 
 def main(args):
