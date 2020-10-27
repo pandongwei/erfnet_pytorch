@@ -5,6 +5,7 @@
 
 import os
 import random
+import math
 import time
 import numpy as np
 import torch
@@ -395,12 +396,12 @@ def test(filenameSave, model, dataloader_test, args):
             # plt.close()
 
 def inference(model, args):
-    image_folder = "/media/pandongwei/Extreme SSD/work_relative/extract_img/2020.10.23_2/"
+    image_folder = "/media/pandongwei/Extreme SSD/work_relative/extract_img/2020.10.16_1/"
     video_save_path = "/home/pandongwei/work_repository/erfnet_pytorch/eval/"
 
     # parameters about saving video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(video_save_path + 'output_new.avi', fourcc, 10.0, (1280, 480))
+    out = cv2.VideoWriter(video_save_path + 'output_new.avi', fourcc, 10.0, (640, 480))
 
     cuda = True
     model.eval()
@@ -433,11 +434,14 @@ def inference(model, args):
 
         label_save = label_color.numpy()
         label_save = label_save.transpose(1, 2, 0)
+        # 加上路径规划
+        label_save = perception_to_angle(label_save)
+
         # label_save.save(filenameSave)
         image = image.cpu().numpy().squeeze(axis=0).transpose(1, 2, 0)
         image = (image * 255).astype(np.uint8)
-        #output = cv2.addWeighted(image, 0.5, label_save, 0.5, 0)
-        output = np.hstack([label_save, image])
+        output = cv2.addWeighted(image, 0.5, label_save, 0.5, 0)
+        #output = np.hstack([label_save, image])
         out.write(output)
 
         print(i, "  time: %.2f s" % (time.time() - start_time))
@@ -469,6 +473,42 @@ def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
     if is_best:
         print("Saving model as best")
         torch.save(state, filenameBest)
+
+def perception_to_angle(map, grid_size=10):
+    tmp = map.copy()
+    size = map.shape
+    map = cv2.resize(map, (size[1] // grid_size, size[0] // grid_size))
+    map = cv2.resize(map, (size[1], size[0]), interpolation=cv2.INTER_NEAREST)
+
+    seed = 240
+    angle_pre, angle, momenton = 0, 0, 0.5
+    path_point = []
+    for i in range(470, -10, -10):
+        if any(map[i][seed] != (255, 0, 0)): break
+        sum_left, sum_right = 0, 0
+        left, right = seed, seed
+        while left >= 0 and all(map[i][left]==(255,0,0)):
+            left -= 10
+            sum_left += 10
+        while right < 640 and all(map[i][right]==(255,0,0)):
+            right += 10
+            sum_right += 10
+        seed = seed - sum_left//2 + sum_right//2
+        path_point.append((seed,i))
+    map = tmp.copy()
+    if len(path_point) > 1:
+        for i in range(len(path_point)-1):
+            cv2.line(map, path_point[i], path_point[i+1], (80,80,255), 3)
+        cv2.line(map, path_point[0], (path_point[0][0],path_point[0][1]-240), (0,0,0), 2)
+        start, end = path_point[0], path_point[-1]
+        angle = math.atan2(start[0]-end[0],start[1]-end[1])
+        angle = momenton * angle_pre + (1-momenton) * angle
+        print(angle*180/math.pi)
+        cv2.line(map, path_point[0],(path_point[0][0]-int(math.tan(angle)*100),path_point[0][1]-100),(0,0,0),3)
+    angle_pre = angle
+    cv2.imshow('test', map)
+    cv2.waitKey(10)
+    return map
 
 
 def main(args):
