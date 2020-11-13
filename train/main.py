@@ -396,7 +396,7 @@ def test(filenameSave, model, dataloader_test, args):
             # plt.close()
 
 def inference(model, args):
-    image_folder = "/media/pandongwei/Extreme SSD/work_relative/extract_img/2020.10.16_1/"
+    image_folder = "/media/pandongwei/ExtremeSSD/work_relative/extract_img/2020.10.16_1/"
     video_save_path = "/home/pandongwei/work_repository/erfnet_pytorch/eval/"
 
     # parameters about saving video
@@ -437,11 +437,16 @@ def inference(model, args):
         label_save = label_save.transpose(1, 2, 0)
         # 加上路径规划
         label_save, angle = perception_to_angle(label_save, angle_pre)
+        # 加一个滤波以防止角度突然跳变 TODO
+        if abs(angle - angle_pre) > 10:
+            angle = angle_pre
+
         angle_pre = angle
         # label_save.save(filenameSave)
         image = image.cpu().numpy().squeeze(axis=0).transpose(1, 2, 0)
         image = (image * 255).astype(np.uint8)
         output = cv2.addWeighted(image, 0.5, label_save, 0.5, 0)
+        cv2.putText(output,str(round(angle,3)),(50,50),cv2.FONT_HERSHEY_SIMPLEX,2,(0,0,0),2)
         #output = np.hstack([label_save, image])
         out.write(output)
 
@@ -449,8 +454,8 @@ def inference(model, args):
     out.release()
 
 def img_to_video():
-    img_path = '/media/pandongwei/Extreme SSD/work_relative/extract_img/2020.10.23_1/'
-    video_path = '/media/pandongwei/Extreme SSD/work_relative/'
+    img_path = '/media/pandongwei/ExtremeSSD/work_relative/extract_img/2020.10.23_1/'
+    video_path = '/media/pandongwei/ExtremeSSD/work_relative/'
     # parameters about saving video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter(video_path + 'video.avi', fourcc, 10.0, (640, 480))
@@ -477,6 +482,7 @@ def save_checkpoint(state, is_best, filenameCheckpoint, filenameBest):
 
 def perception_to_angle(map, angle_pre, grid_size=10):
     tmp = map.copy()
+    # 图片降采样
     size = map.shape
     map = cv2.resize(map, (size[1] // grid_size, size[0] // grid_size))
     map = cv2.resize(map, (size[1], size[0]), interpolation=cv2.INTER_NEAREST)
@@ -484,6 +490,7 @@ def perception_to_angle(map, angle_pre, grid_size=10):
     seed = 240
     angle, momenton = 0, 0.5
     path_point = []
+    sum_point = [0,0]
     for i in range(470, -10, -10):
         if any(map[i][seed] != (255, 0, 0)): break
         sum_left, sum_right = 0, 0
@@ -496,17 +503,27 @@ def perception_to_angle(map, angle_pre, grid_size=10):
             sum_right += 10
         seed = seed - sum_left//2 + sum_right//2
         path_point.append((seed,i))
+        sum_point[0] += seed
+        sum_point[1] += i
+
     map = tmp.copy()
     if len(path_point) > 1:
         for i in range(len(path_point)-1):
+            # 画轨迹图
             cv2.line(map, path_point[i], path_point[i+1], (80,80,255), 3)
-        cv2.line(map, path_point[0], (path_point[0][0],path_point[0][1]-240), (0,0,0), 2)
+        cv2.line(map, path_point[0], (path_point[0][0], path_point[0][1]-240), (0,0,0), 2)
+        # 角度更新的方式
         start, end = path_point[0], path_point[-1]
-        angle = math.atan2(start[0]-end[0],start[1]-end[1])
-        angle = momenton * angle_pre + (1-momenton) * angle
-        cv2.line(map, path_point[0],(path_point[0][0]-int(math.tan(angle)*100),path_point[0][1]-100),(0,0,0),3)
-    return map, angle
+        #angle = math.atan2(start[0]-end[0],start[1]-end[1])
 
+        point_average = tuple([sum_point[0] // len(path_point), sum_point[1] // len(path_point)])
+        angle = math.atan2(start[0]-point_average[0], start[1]-point_average[1])*180/math.pi
+
+        # 加上 momenton
+        angle = momenton * angle_pre + (1-momenton) * angle
+        # 转向角度可视化
+        cv2.line(map, path_point[0],(path_point[0][0]-int(math.tan(angle*math.pi/180.)*100),path_point[0][1]-100),(0,0,0),3)
+    return map, angle
 
 def main(args):
     savedir = f'../save/{args.savedir}'
@@ -586,9 +603,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--port', type=int, default=8097)
     #parser.add_argument('--datadir', default="/home/disk1/pandongwei/cityscape/leftImg8bit_trainvaltest/")
-    #parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
+    #parser.add_argument('--datadir', default="/media/pandongwei/ExtremeSSD/work_relative/cityscape/leftImg8bit_trainvaltest/")
     #parser.add_argument('--datadir', default='/home/disk1/pandongwei/extract_img/')
-    parser.add_argument('--datadir', default="/media/pandongwei/Extreme SSD/work_relative/extract_img/")
+    parser.add_argument('--datadir', default="/media/pandongwei/ExtremeSSD/work_relative/extract_img/2020.10.16_1/")
     parser.add_argument('--height', type=int, default=512)
     parser.add_argument('--num-epochs', type=int, default=150) #150
     parser.add_argument('--num-workers', type=int, default=4)

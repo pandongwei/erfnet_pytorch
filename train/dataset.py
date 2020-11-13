@@ -121,6 +121,8 @@ class cityscapes_cv(Dataset):
         self.filenamesGt = [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(self.labels_root)) for f in
                             fn if is_label(f)]
         self.filenamesGt.sort()
+        # print(len(self.filenames))
+        # print('1111111', len(self.filenamesGt))
 
         self.co_transform = co_transform  # ADDED THIS
         # print(len(self.filenames), ' ', len(self.filenamesGt))
